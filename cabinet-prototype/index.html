@@ -74,6 +74,18 @@
     <iframe id="screen" class="w-full flex-1 border-0" title="Экран кабинета"></iframe>
   </main>
 
+  <!-- ГЛОБАЛЬНЫЙ ПОИСК (⌘K) — палитра поверх любого экрана -->
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black/30 z-50" onclick="closeSearch()">
+    <div class="mx-auto mt-[12vh] w-[600px] max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-2xl border border-neutral-200 overflow-hidden" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-2.5 px-4 border-b border-neutral-100">
+        <i data-lucide="search" class="w-[18px] h-[18px] text-neutral-400 shrink-0"></i>
+        <input id="search-input" autocomplete="off" class="flex-1 h-12 outline-none text-[14px] placeholder-neutral-400" placeholder="Гость, объект, бронь, раздел или действие…">
+        <kbd class="text-[10.5px] font-semibold text-neutral-400 border border-neutral-200 rounded px-1.5 py-0.5">Esc</kbd>
+      </div>
+      <div id="search-results" class="max-h-[55vh] overflow-y-auto py-1.5"></div>
+    </div>
+  </div>
+
 <script>
   // ── Единый NAV: 9 пунктов, Календарь (не Брони), Настройки последним ──
   const SCREENS = [
@@ -300,6 +312,10 @@
           <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
           <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800" onclick="toast('Переход к тарифам')">Тариф</button>
         </div>
+        <button id="h24-search-btn" title="Поиск (⌘K)" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-500 text-[13px] font-medium">
+          <i data-lucide="search" class="w-[18px] h-[18px]"></i>
+          <kbd class="text-[10.5px] font-semibold text-neutral-400 border border-neutral-200 rounded px-1 py-0.5 leading-none">⌘K</kbd>
+        </button>
         <div class="relative">
           <button id="h24-support-btn" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
             <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
@@ -350,6 +366,7 @@
         </div>
       </div>
       <div class="mobile-only items-center gap-2">
+        <button id="h24-search-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500"><i data-lucide="search" class="w-5 h-5"></i></button>
         <button id="h24-ref-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-teal-700 relative"><i data-lucide="gift" class="w-5 h-5"></i><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-600 ring-2 ring-white"></span></button>
         <button id="h24-bell-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
         <button id="h24-profile-btn-m" class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</button>
@@ -362,10 +379,100 @@
     wire(['h24-bell-btn', 'h24-bell-btn-m'], 'h24-bell-menu');
     wire(['h24-profile-btn', 'h24-profile-btn-m'], 'h24-profile-menu');
     wire(['h24-support-btn'], 'h24-support-menu');
+    // глобальный поиск: кнопка в топбаре + ⌘K/Ctrl+K из любого экрана (палитра живёт в shell)
+    ['h24-search-btn', 'h24-search-btn-m'].forEach(id => { const b = doc.getElementById(id); if (b) b.onclick = e => { e.stopPropagation(); parent.openSearch(); }; });
+    doc.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.code === 'KeyK') { e.preventDefault(); parent.openSearch(); } });
     doc.addEventListener('click', () => menus.forEach(m => m.classList.add('hidden')));
     installToast(doc);
     if (doc.defaultView.lucide) doc.defaultView.lucide.createIcons();
   }
+
+  // ── ГЛОБАЛЬНЫЙ ПОИСК (⌘K): разделы + демо-данные (объекты, гости/брони, действия) ──
+  const SEARCH_ITEMS = [
+    ...SCREENS.map(s => ({ group:'Разделы', icon:s.icon, label:s.label, sub:'раздел кабинета', screen:s.key })),
+    { group:'Объекты', icon:'building-2', label:'Тверская 15', sub:'Москва, ул. Тверская, 15, кв. 48', screen:'objects' },
+    { group:'Объекты', icon:'building-2', label:'Арбат 8',     sub:'Москва, ул. Арбат, 8, кв. 12',     screen:'objects' },
+    { group:'Объекты', icon:'building-2', label:'Ленина 42',   sub:'Москва, пр-т Ленина, 42, кв. 91',  screen:'objects' },
+    { group:'Объекты', icon:'building-2', label:'Победы 7',    sub:'Москва, ул. Победы, 7, кв. 5 · черновик', screen:'objects' },
+    { group:'Объекты', icon:'building-2', label:'Садовая 3',   sub:'Москва, ул. Садовая, 3, кв. 120',  screen:'objects' },
+    { group:'Объекты', icon:'building-2', label:'Дачная 12',   sub:'МО, пос. Загорье, ул. Дачная, 12', screen:'objects' },
+    { group:'Гости и брони', icon:'user', label:'Сергей Котов',   sub:'Тверская 15 · 1–5 июн · код 9500#', screen:'calendar' },
+    { group:'Гости и брони', icon:'user', label:'Анна Лебедева',  sub:'Арбат 8 · 30 мая – 2 июн',          screen:'calendar' },
+    { group:'Гости и брони', icon:'user', label:'Мария Морозова', sub:'Тверская 15 · 5–9 июн',             screen:'calendar' },
+    { group:'Гости и брони', icon:'user', label:'Дмитрий Орлов',  sub:'Тверская 15 · 8–11 июн',            screen:'calendar' },
+    { group:'Гости и брони', icon:'user', label:'Игорь Сафин',    sub:'Арбат 8 · 2–4 июн',                 screen:'calendar' },
+    { group:'Действия', icon:'calendar-plus', label:'Создать бронь',           sub:'Календарь',             screen:'calendar' },
+    { group:'Действия', icon:'phone-incoming', label:'Добавить лид',           sub:'Календарь → Доска',     screen:'calendar' },
+    { group:'Действия', icon:'plus',          label:'Добавить объект',         sub:'Объекты',               screen:'objects' },
+    { group:'Действия', icon:'mail-plus',     label:'Новый шаблон сообщения',  sub:'Автоматизация',         screen:'automation' },
+    { group:'Действия', icon:'user-plus',     label:'Пригласить пользователя', sub:'Настройки → Команда',   screen:'settings' },
+  ];
+  let searchHits = [];   // плоский список текущих результатов (для клавиатуры)
+  let searchSel = 0;
+
+  function openSearch() {
+    document.getElementById('search-overlay').classList.remove('hidden');
+    const inp = document.getElementById('search-input');
+    inp.value = ''; searchSel = 0; renderSearch('');
+    window.focus(); setTimeout(() => inp.focus(), 0);
+  }
+  function closeSearch() { document.getElementById('search-overlay').classList.add('hidden'); }
+
+  function renderSearch(q) {
+    const box = document.getElementById('search-results');
+    q = q.trim().toLowerCase();
+    searchHits = SEARCH_ITEMS.filter(it => !q || (it.label + ' ' + it.sub).toLowerCase().includes(q));
+    if (searchSel >= searchHits.length) searchSel = 0;
+    if (!searchHits.length) {
+      box.innerHTML = '<div class="px-4 py-6 text-center text-[13px] text-neutral-400">Ничего не нашлось. Попробуйте имя гостя, адрес или раздел.</div>';
+      return;
+    }
+    let html = '', lastGroup = null;
+    searchHits.forEach((it, i) => {
+      if (it.group !== lastGroup) {
+        html += `<div class="px-4 pt-2.5 pb-1 text-[11px] font-semibold text-neutral-400 uppercase tracking-wide">${it.group}</div>`;
+        lastGroup = it.group;
+      }
+      html += `
+        <div data-i="${i}" onclick="searchGo(${i})" onmousemove="searchSel=${i};markSel()"
+             class="srch-row flex items-center gap-3 mx-1.5 px-2.5 py-2 rounded-lg cursor-pointer ${i === searchSel ? 'bg-teal-50' : 'hover:bg-neutral-50'}">
+          <span class="w-8 h-8 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="${it.icon}" class="w-4 h-4 text-neutral-500"></i></span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-[13.5px] font-medium text-neutral-900 truncate">${it.label}</span>
+            <span class="block text-[12px] text-neutral-500 truncate">${it.sub}</span>
+          </span>
+          <i data-lucide="corner-down-left" class="w-3.5 h-3.5 text-neutral-300 shrink-0 ${i === searchSel ? '' : 'invisible'}"></i>
+        </div>`;
+    });
+    box.innerHTML = html;
+    lucide.createIcons();
+  }
+  function markSel() {       // подсветка выбранного без полного перерендера
+    document.querySelectorAll('.srch-row').forEach(r => {
+      const on = +r.dataset.i === searchSel;
+      r.classList.toggle('bg-teal-50', on);
+      r.classList.toggle('hover:bg-neutral-50', !on);
+      const ent = r.querySelector('[data-lucide="corner-down-left"], svg.lucide-corner-down-left');
+      if (ent) ent.classList.toggle('invisible', !on);
+    });
+  }
+  function searchGo(i) {
+    const it = searchHits[i];
+    if (!it) return;
+    closeSearch();
+    setScreen(it.screen);
+  }
+  document.getElementById('search-input').addEventListener('input', e => { searchSel = 0; renderSearch(e.target.value); });
+  document.getElementById('search-input').addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); searchSel = Math.min(searchSel + 1, searchHits.length - 1); markSel(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); searchSel = Math.max(searchSel - 1, 0); markSel(); }
+    else if (e.key === 'Enter') { e.preventDefault(); searchGo(searchSel); }
+    else if (e.key === 'Escape') { closeSearch(); }
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyK') { e.preventDefault(); openSearch(); }
+    else if (e.key === 'Escape') closeSearch();
+  });
 
   // ── drag-reorder ──
   let dragEl = null;

@@ -283,6 +283,7 @@
   const INTEG = [
     { id:'ttlock', name:'TTLock', icon:'lock', desc:'Умные замки и кейбоксы', status:'connected', meta:'rentyroom · 6 замков' },
     { id:'yukassa', name:'ЮKassa', icon:'wallet', desc:'Приём оплат и допродаж от гостей', status:'connected', meta:'shopId 9•••12' },
+    { id:'mango', name:'Mango Office', icon:'phone-call', desc:'Телефония: входящий звонок сам становится лидом на Доске, запись разговора — в карточке лида', status:'disconnected' },
     { id:'yandex', name:'Яндекс ID', icon:'calendar', desc:'Календарь и почта (OAuth)', status:'disconnected' },
     { id:'google', name:'Google', icon:'calendar', desc:'Календарь (OAuth)', status:'disconnected' },
   ];
@@ -317,7 +318,7 @@
     { key:'team',         label:'Команда',          icon:'users',      desc:'Пользователи с доступом и сотрудники для кодов.' },
     { key:'billing',      label:'Биллинг',          icon:'credit-card',desc:'Тариф, оплата, история и документы.' },
     { key:'referral',     label:'Реферальная программа', icon:'gift',  desc:'Приглашайте коллег — получайте бонусы за каждого оплатившего.' },
-    { key:'integrations', label:'Интеграции',       icon:'plug',       desc:'Замки, источники броней, платежи и OAuth.' },
+    { key:'integrations', label:'Интеграции',       icon:'plug',       desc:'Замки, источники броней, платежи, телефония и OAuth.' },
     { key:'notifications',label:'Мои уведомления',   icon:'bell',       desc:'Что вы получаете в email, мессенджер и push.' },
     { key:'audit',        label:'Аудит действий',    icon:'shield',     desc:'Технический лог действий в кабинете (152-ФЗ).' },
   ];
@@ -827,7 +828,7 @@
 
       <!-- Сервисы -->
       <h2 class="text-[16px] font-bold mt-7 mb-1">Сервисы</h2>
-      <p class="text-[13px] text-neutral-500 mb-3">Замки, приём платежей и вход через OAuth.</p>
+      <p class="text-[13px] text-neutral-500 mb-3">Замки, приём платежей, телефония и вход через OAuth.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${services}</div>`;
   }
 
