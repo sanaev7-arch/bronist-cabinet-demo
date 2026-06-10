@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Настройки</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* аккуратный переключатель (наследован из Объектов/Автоматизации) */
+  .tgl { position: relative; width: 40px; height: 22px; border-radius: 9999px; background: #d4d4d4; transition: background .15s ease; flex: none; cursor: pointer; }
+  .tgl.on { background: #0d9488; }
+  .tgl .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: left .15s ease; }
+  .tgl.on .knob { left: 21px; }
+  .a-input { font-size: 13px; }
+
+  /* двухколоночный settings-layout */
+  .settings-grid { display: grid; grid-template-columns: 244px minmax(0,1fr); gap: 22px; align-items: start; }
+  #settingsPanel { min-width: 0; }
+  .settings-back { display: none; }
+  .set-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; font-size:14px; font-weight:500; color:#404040; cursor:pointer; border:1px solid transparent; }
+  .set-item:hover { background:#f5f5f4; }
+  .set-item.active { background:#f0fdfa; color:#115e59; border-color:#0f766e; font-weight:600; }
+  .set-item.active i { color:#0f766e; }
+  .desktop-hide-chevron { display:none; }
+
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    .a-input { font-size: 16px !important; }
+    /* push-navigation: список ИЛИ деталь */
+    .settings-grid { grid-template-columns: 1fr; }
+    .settings-grid:not(.mobile-detail) #settingsPanel { display: none; }
+    .settings-grid.mobile-detail #settingsMenu { display: none; }
+    body.detail-mode .settings-back { display: inline-flex; }
+    .desktop-hide-chevron { display: inline-block; }
+    #settingsMenu { position: static !important; }
+  }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-semibold bg-teal-700 text-white cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-white/40"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Настройки</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button onclick="setSub('billing')" class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <div class="relative">
+          <button onclick="toggleProfile()" class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+            <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+            <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="profileMenu" class="hidden absolute right-0 top-full mt-1.5 w-64 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="flex items-center gap-3 px-4 py-3.5 bg-teal-50/60 border-b border-neutral-100">
+              <div class="w-10 h-10 rounded-full bg-teal-700 grid place-items-center text-[15px] font-semibold text-white shrink-0">М</div>
+              <div class="min-w-0">
+                <div class="text-[14px] font-semibold text-neutral-900 truncate">Михаил</div>
+                <div class="text-[12px] text-teal-700 mono truncate">mikhail@bronist.ru</div>
+              </div>
+            </div>
+            <button onclick="setSub('profile'); toggleProfile()" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 text-[13px] font-medium text-neutral-700"><i data-lucide="user" class="w-[18px] h-[18px] text-teal-600"></i> Мой профиль</button>
+            <div class="px-4 py-2.5 border-t border-neutral-100">
+              <div class="text-[11px] font-semibold text-neutral-400 uppercase tracking-wide mb-1.5">Тема</div>
+              <div class="flex items-center gap-1 bg-neutral-100 rounded-lg p-1">
+                <button onclick="toast('Тема: Светлая')" class="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-medium py-1.5 rounded-md bg-white shadow-sm text-teal-700"><i data-lucide="sun" class="w-3.5 h-3.5"></i> Светлая</button>
+                <button onclick="toast('Тема: Тёмная')" class="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-medium py-1.5 rounded-md text-neutral-500"><i data-lucide="moon" class="w-3.5 h-3.5"></i> Тёмная</button>
+              </div>
+            </div>
+            <button onclick="toast('Язык интерфейса')" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 text-[13px] font-medium text-neutral-700 border-t border-neutral-100"><i data-lucide="languages" class="w-[18px] h-[18px] text-teal-600"></i> Язык <span class="ml-auto text-[12px] text-neutral-400">Русский</span></button>
+            <button onclick="toast('Выход из аккаунта')" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-[13px] font-semibold text-red-600 border-t border-neutral-100"><i data-lucide="log-out" class="w-[18px] h-[18px] text-red-500"></i> Выйти</button>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <div class="sticky top-0 z-20 bg-white border-b border-neutral-200">
+        <div class="content-pad max-w-[1100px] mx-auto px-6 pt-4 pb-3">
+          <button class="settings-back items-center gap-1 text-[13px] text-neutral-500 hover:text-teal-700 mb-2" onclick="backToMenu()"><i data-lucide="chevron-left" class="w-4 h-4"></i> Настройки</button>
+          <div class="min-w-0">
+            <h1 id="setTitle" class="text-[20px] font-bold tracking-tight">Настройки</h1>
+            <p id="setDesc" class="text-[13px] text-neutral-500">Профиль, команда, биллинг и интеграции вашего бизнеса.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-pad max-w-[1100px] mx-auto px-6 py-5 w-full">
+        <div id="settingsGrid" class="settings-grid">
+          <!-- левое меню подразделов -->
+          <nav id="settingsMenu" class="bg-white rounded-xl border border-neutral-200 p-2 sticky top-[92px]"></nav>
+          <!-- панель контента -->
+          <div id="settingsPanel"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Настройки активна внизу, основной список без active) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Брони' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика' },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] text-neutral-700 font-medium hover:bg-neutral-100">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-700 text-white">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ════════════════════ ДАННЫЕ ════════════════════
+  const TEAM = [
+    { name:'Михаил', email:'mikhail@bronist.ru', role:'owner', objects:'Все объекты' },
+    { name:'Анна Петрова', email:'anna@bronist.ru', role:'manager', objects:'Все объекты' },
+    { name:'Радик Сафин', email:'radik@bronist.ru', role:'admin', revenue:false, pay:false, objectIds:[1,2,3] },
+    { name:'Ольга Дёмина', email:'olga@bronist.ru', role:'admin', revenue:true, pay:false, objectIds:[4,5] },
+  ];
+  let openUser = null; // индекс раскрытой строки пользователя
+  // все объекты тенанта — для picker привязки
+  const OBJECTS = [
+    { id:1, name:'Тверская 15', city:'Москва' },
+    { id:2, name:'Арбат 4', city:'Москва' },
+    { id:3, name:'Невский 28', city:'СПб' },
+    { id:4, name:'Апартаменты «Уют»', city:'Москва' },
+    { id:5, name:'Студия на Мойке', city:'СПб' },
+    { id:6, name:'Лофт Красный Октябрь', city:'Москва' },
+  ];
+  const ROLE_BADGE = {
+    owner:   `<span class="text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-bordo/10 text-bordo">Владелец</span>`,
+    manager: `<span class="text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Управляющий</span>`,
+    admin:   `<span class="text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600">Администратор</span>`,
+  };
+  const STAFF = [
+    { name:'Гульнара', role:'Горничная', phone:'+7 916 200-11-22', channel:'WhatsApp', codes:1, objectIds:[1,2] },
+    { name:'Иван Котов', role:'Сантехник', phone:'+7 925 555-77-99', channel:'Telegram', codes:0, objectIds:[] },
+  ];
+  let openStaff = null; // индекс раскрытого сотрудника (picker объектов)
+
+  // Источники броней
+  // kind: 'webhook' (RC — приём push на наш секретный URL + фид каталога),
+  //       'apikey' (TravelLine — pull по X-API-KEY, крон + кнопка),
+  //       'ical' (фид .ics)
+  const PMS = [
+    { name:'TravelLine', kind:'apikey', status:'connected', meta:'API-ключ активен · загрузка 5 мин назад', popular:true },
+    { name:'RealtyCalendar', kind:'webhook', status:'disconnected', popular:true },
+    { name:'Bnovo', kind:'ical', status:'disconnected', popular:true },
+    { name:'Шахматка / Контур.Отель', kind:'ical', status:'disconnected' },
+  ];
+  const OTA = [
+    { name:'Авито', on:true }, { name:'Суточно.ру', on:true }, { name:'Островок', on:true },
+    { name:'Циан', on:false }, { name:'Booking.com', on:false }, { name:'Airbnb', on:false },
+    { name:'Яндекс Путешествия', on:false }, { name:'Tvil.ru', on:false },
+  ];
+  const INTEG = [
+    { id:'ttlock', name:'TTLock', icon:'lock', desc:'Умные замки и кейбоксы', status:'connected', meta:'rentyroom · 6 замков' },
+    { id:'yukassa', name:'ЮKassa', icon:'wallet', desc:'Приём оплат и допродаж от гостей', status:'connected', meta:'shopId 9•••12' },
+    { id:'yandex', name:'Яндекс ID', icon:'calendar', desc:'Календарь и почта (OAuth)', status:'disconnected' },
+    { id:'google', name:'Google', icon:'calendar', desc:'Календарь (OAuth)', status:'disconnected' },
+  ];
+
+  // уведомления — по группам событий (не по каждому событию)
+  const NOTIF = [
+    { ev:'Брони и заезды', sub:'создание, заезд, выезд, загрузка из площадок', icon:'calendar', email:true, msg:true, push:false },
+    { ev:'Замки и доступ', sub:'не сработал, неверный код, низкий заряд', icon:'lock', email:true, msg:true, push:true },
+    { ev:'Оплаты', sub:'прошла / не прошла, допродажи', icon:'wallet', email:true, msg:true, push:true },
+    { ev:'AI-эскалации', sub:'AI передал сложный вопрос вам', icon:'flag', email:true, msg:true, push:true },
+    { ev:'Персонал и уборка', sub:'заход сотрудника, окончание уборки', icon:'hard-hat', email:false, msg:true, push:false },
+    { ev:'Отчёты', sub:'ежедневная и недельная сводка', icon:'bar-chart-3', email:true, msg:false, push:false },
+  ];
+
+  const PAYMENTS = [
+    { date:'01.06.2026', sum:'0 ₽', plan:'Free · до 10 объектов', status:'ok' },
+    { date:'01.05.2026', sum:'0 ₽', plan:'Free · до 10 объектов', status:'ok' },
+    { date:'01.04.2026', sum:'0 ₽', plan:'Free · до 10 объектов', status:'ok' },
+  ];
+  const AUDIT = [
+    { time:'04.06.2026 13:20', who:'Михаил', act:'Изменил правило генерации кода доступа', ip:'85.140.12.4' },
+    { time:'04.06.2026 11:05', who:'Анна Петрова', act:'Добавила объект «Арбат 4»', ip:'95.24.6.110' },
+    { time:'03.06.2026 19:42', who:'Радик Сафин', act:'Сгенерировал код доступа · бронь AV-148210', ip:'176.59.8.21' },
+    { time:'03.06.2026 09:15', who:'Система', act:'Автосписание подписки · 0 ₽ (Free)', ip:'—' },
+    { time:'02.06.2026 14:30', who:'Михаил', act:'Подключил канал Telegram · бот', ip:'85.140.12.4' },
+  ];
+
+  // ════════════════════ ПОДРАЗДЕЛЫ ════════════════════
+  const SUBS = [
+    { key:'profile',      label:'Мой профиль',      icon:'user',       desc:'Личные данные, тема и язык интерфейса.' },
+    { key:'company',      label:'Профиль компании', icon:'briefcase',  desc:'Что видит гость: название, лого, контакты поддержки.' },
+    { key:'team',         label:'Команда',          icon:'users',      desc:'Пользователи с доступом и сотрудники для кодов.' },
+    { key:'billing',      label:'Биллинг',          icon:'credit-card',desc:'Тариф, оплата, история и документы.' },
+    { key:'referral',     label:'Реферальная программа', icon:'gift',  desc:'Приглашайте коллег — получайте бонусы за каждого оплатившего.' },
+    { key:'integrations', label:'Интеграции',       icon:'plug',       desc:'Замки, источники броней, платежи и OAuth.' },
+    { key:'notifications',label:'Мои уведомления',   icon:'bell',       desc:'Что вы получаете в email, мессенджер и push.' },
+    { key:'audit',        label:'Аудит действий',    icon:'shield',     desc:'Технический лог действий в кабинете (152-ФЗ).' },
+  ];
+  let activeSub = 'profile';
+
+  function renderMenu() {
+    document.getElementById('settingsMenu').innerHTML = SUBS.map((s) => `
+      <button onclick="setSub('${s.key}')" class="set-item w-full ${s.key===activeSub?'active':''}">
+        <i data-lucide="${s.icon}" class="w-[18px] h-[18px] text-neutral-500 shrink-0"></i>
+        <span class="text-left">${s.label}</span>
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-300 desktop-hide-chevron"></i>
+      </button>`).join('');
+    lucide.createIcons();
+  }
+  function setSub(k) {
+    activeSub = k;
+    const s = SUBS.find((x) => x.key === k);
+    document.getElementById('setTitle').textContent = s.label;
+    document.getElementById('setDesc').textContent = s.desc;
+    document.getElementById('settingsGrid').classList.add('mobile-detail');
+    document.body.classList.add('detail-mode');
+    renderMenu(); renderPanel();
+    document.querySelector('main').scrollTop = 0;
+  }
+  function backToMenu() {
+    document.getElementById('settingsGrid').classList.remove('mobile-detail');
+    document.body.classList.remove('detail-mode');
+    document.getElementById('setTitle').textContent = 'Настройки';
+    document.getElementById('setDesc').textContent = 'Профиль, команда, биллинг и интеграции вашего бизнеса.';
+  }
+  function renderPanel() {
+    const el = document.getElementById('settingsPanel');
+    const map = { profile:profileHtml, company:companyHtml, team:teamHtml, billing:billingHtml, referral:referralHtml, integrations:integrationsHtml, notifications:notifHtml, audit:auditHtml };
+    el.innerHTML = map[activeSub]();
+    lucide.createIcons();
+  }
+
+  // общие хелперы
+  const card = (inner, extra='') => `<div class="bg-white rounded-xl border border-neutral-200 p-4 ${extra}">${inner}</div>`;
+  const blockHead = (icon, title, sub='') => `
+    <div class="flex items-center gap-2 mb-1"><i data-lucide="${icon}" class="w-[18px] h-[18px] text-teal-600"></i><h2 class="text-[15px] font-bold">${title}</h2></div>
+    ${sub ? `<p class="text-[12.5px] text-neutral-500 mb-3">${sub}</p>` : '<div class="mb-3"></div>'}`;
+  const field = (label, inputHtml) => `<div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">${label}</label>${inputHtml}</div>`;
+  const inp = (val, type='text') => `<input type="${type}" value="${escapeHtml(val)}" class="a-input rounded-md border border-neutral-200 px-2.5 py-2 focus:outline-none focus:border-teal-700" />`;
+  const sel = (opts) => `<select class="a-input rounded-md border border-neutral-200 bg-white px-2.5 py-2 focus:outline-none focus:border-teal-700">${opts.map((o,i)=>`<option ${i===0?'selected':''}>${o}</option>`).join('')}</select>`;
+  const saveBar = (label='Сохранить') => `<div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100"><button onclick="toast('Изменения сохранены')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> ${label}</button></div>`;
+  const statusBadge = (st) => st==='connected'
+    ? `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Подключено</span>`
+    : `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-500"><i data-lucide="circle" class="w-3.5 h-3.5"></i> Не подключено</span>`;
+
+  // ════════════════════ 1. МОЙ ПРОФИЛЬ ════════════════════
+  function profileHtml() {
+    return `
+      ${card(`
+        ${blockHead('user','Личные данные','Видны только вам и вашей команде, не гостям.')}
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-16 h-16 rounded-full bg-teal-700 grid place-items-center text-[24px] font-semibold text-white shrink-0">М</div>
+          <div class="flex flex-col gap-1.5">
+            <button onclick="toast('Загрузка фото — в реализации')" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Сменить фото</button>
+            <span class="text-[11.5px] text-neutral-400">PNG или JPG, до 2 МБ</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${field('Имя', inp('Михаил'))}
+          ${field('Email', inp('mikhail@bronist.ru','email'))}
+          ${field('Телефон', inp('+7 916 123-45-67','tel'))}
+          ${field('Роль', `<input value="Владелец" disabled class="a-input rounded-md border border-neutral-200 bg-neutral-50 text-neutral-500 px-2.5 py-2" />`)}
+        </div>
+        ${saveBar()}
+      `)}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        ${card(`
+          ${blockHead('palette','Интерфейс')}
+          <div class="grid grid-cols-1 gap-3">
+            ${field('Тема', sel(['Системная','Светлая','Тёмная']))}
+            ${field('Язык', sel(['Русский','English']))}
+          </div>
+        `)}
+        ${card(`
+          ${blockHead('shield-check','Безопасность')}
+          <div class="space-y-2.5">
+            <button onclick="toast('Смена пароля — в реализации')" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-neutral-200 hover:border-teal-700 text-[13px] font-medium text-neutral-700"><i data-lucide="key" class="w-4 h-4 text-neutral-500"></i> Сменить пароль <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-300"></i></button>
+            <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-neutral-200">
+              <i data-lucide="smartphone" class="w-4 h-4 text-neutral-500"></i>
+              <span class="text-[13px] font-medium text-neutral-700">Двухфакторная аутентификация</span>
+              <span class="tgl ml-auto" onclick="this.classList.toggle('on'); toast('2FA — настройка по SMS/TOTP')"><span class="knob"></span></span>
+            </div>
+            <button onclick="toast('Удаление аккаунта — потребует подтверждения')" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-neutral-200 hover:border-red-300 text-[13px] font-medium text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i> Удалить аккаунт</button>
+          </div>
+        `)}
+      </div>`;
+  }
+
+  // ════════════════════ 2. ПРОФИЛЬ КОМПАНИИ ════════════════════
+  function companyHtml() {
+    return `
+      <div class="flex items-start gap-2 text-[12px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2.5 mb-4">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+        <span>Эти данные <b class="font-semibold">видит гость</b>: подставляются в шаблоны через переменную <span class="mono text-[11.5px] bg-white px-1 py-0.5 rounded border border-teal-100">[Компания]</span> и показываются на Странице брони.</span>
+      </div>
+      ${card(`
+        ${blockHead('briefcase','Бренд')}
+        <div class="flex flex-col gap-1">
+          <label class="text-[12px] text-neutral-500 mb-1">Логотип</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-xl border border-dashed border-neutral-300 grid place-items-center text-neutral-400 shrink-0"><i data-lucide="image" class="w-5 h-5"></i></div>
+            <div class="flex flex-col gap-1 min-w-0">
+              <button onclick="toast('Загрузка лого — в реализации')" class="self-start text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Загрузить</button>
+              <span class="text-[11.5px] text-neutral-400 leading-snug">PNG/SVG. Появится в шапке Страницы брони и письмах гостю.</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3">${field('Название компании', inp('Апартаменты «Уют»'))}</div>
+        ${saveBar()}
+      `)}
+      ${card(`
+        ${blockHead('headset','Контакты поддержки для гостей','Гость увидит их на Странице брони и в авто-подписи сообщений.')}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          ${field('Телефон', inp('+7 495 123-45-67','tel'))}
+          ${field('Email', inp('help@uyut.ru','email'))}
+          ${field('Мессенджер', `<div class="flex gap-2">${sel(['MAX','Telegram','WhatsApp'])}<input value="@uyut_support" class="a-input flex-1 min-w-0 rounded-md border border-neutral-200 px-2.5 py-2 focus:outline-none focus:border-teal-700" placeholder="@аккаунт или ссылка" /></div>`)}
+          ${field('Часы поддержки', sel(['Круглосуточно','09:00–21:00','10:00–20:00']))}
+        </div>
+        ${saveBar()}
+      `,'mt-4')}
+      ${card(`
+        ${blockHead('file-text','Документы и ЭДО','Реквизиты, акты и счета для бухгалтерии.')}
+        <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-neutral-200 mb-2.5">
+          <i data-lucide="repeat" class="w-4 h-4 text-neutral-500"></i>
+          <div class="min-w-0"><div class="text-[13px] font-medium">Электронный документооборот</div><div class="text-[11.5px] text-neutral-400">Акты и счета через ЭДО (Диадок / СБИС)</div></div>
+          <span class="tgl ml-auto" onclick="this.classList.toggle('on'); toast('ЭДО — настройка оператора')"><span class="knob"></span></span>
+        </div>
+        <button onclick="toast('Реквизиты компании — в реализации')" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-neutral-200 hover:border-teal-700 text-[13px] font-medium text-neutral-700"><i data-lucide="building" class="w-4 h-4 text-neutral-500"></i> Реквизиты компании <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-300"></i></button>
+      `,'mt-4')}`;
+  }
+
+  // ════════════════════ 3. КОМАНДА ════════════════════
+  function changeUserRole(i, v) {
+    event.stopPropagation();
+    TEAM[i].role = v;
+    if (v === 'admin') { TEAM[i].revenue ??= false; TEAM[i].pay ??= false; TEAM[i].objectIds ??= []; }
+    renderPanel(); toast(`Роль «${TEAM[i].name}»: ${v==='manager'?'Управляющий':'Администратор'}`);
+  }
+  function toggleUser(i) { if (TEAM[i].role === 'owner') return; openUser = (openUser === i ? null : i); renderPanel(); }
+  function toggleUserObject(i, oid) {
+    event.stopPropagation();
+    const arr = TEAM[i].objectIds;
+    const k = arr.indexOf(oid);
+    if (k >= 0) arr.splice(k, 1); else arr.push(oid);
+    renderPanel(); toast('Доступ к объектам обновлён');
+  }
+
+  function teamHtml() {
+    const roleSwitch = (i, role) => `
+      <div class="flex gap-1 bg-neutral-100 rounded-lg p-1 w-max">
+        <button onclick="changeUserRole(${i},'manager')" class="text-[12px] font-medium px-3 py-1.5 rounded-md ${role==='manager'?'bg-white shadow-sm text-teal-700':'text-neutral-500'}">Управляющий</button>
+        <button onclick="changeUserRole(${i},'admin')" class="text-[12px] font-medium px-3 py-1.5 rounded-md ${role==='admin'?'bg-white shadow-sm text-teal-700':'text-neutral-500'}">Администратор</button>
+      </div>`;
+
+    const rows = TEAM.map((u, i) => {
+      const open = openUser === i;
+      const clickable = u.role !== 'owner';
+      // содержимое раскрытой панели
+      let panel = '';
+      if (open && clickable) {
+        const roleBlock = `
+          <div class="mb-3">
+            <div class="text-[12px] font-medium text-neutral-600 mb-1.5">Роль</div>
+            ${roleSwitch(i, u.role)}
+          </div>`;
+        if (u.role === 'admin') {
+          panel = `
+            <div class="px-3.5 pb-3 pt-2 bg-neutral-50/60 border-t border-neutral-100">
+              ${roleBlock}
+              <div class="text-[12px] font-medium text-neutral-600 mb-1.5">Права</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 bg-white">
+                  <i data-lucide="banknote" class="w-4 h-4 text-neutral-500 shrink-0"></i>
+                  <span class="text-[12.5px] font-medium">Показывать выручку</span>
+                  <span class="tgl ml-auto ${u.revenue?'on':''}" onclick="this.classList.toggle('on'); toast('«${escapeHtml(u.name)}»: выручка')"><span class="knob"></span></span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-neutral-200 bg-white">
+                  <i data-lucide="credit-card" class="w-4 h-4 text-neutral-500 shrink-0"></i>
+                  <span class="text-[12.5px] font-medium">Оплачивать подписку</span>
+                  <span class="tgl ml-auto ${u.pay?'on':''}" onclick="this.classList.toggle('on'); toast('«${escapeHtml(u.name)}»: оплата')"><span class="knob"></span></span>
+                </div>
+              </div>
+              <div class="text-[12px] font-medium text-neutral-600 mb-2">Доступ к объектам · видит и обслуживает только их</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                ${OBJECTS.map((o) => `
+                  <label class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border ${u.objectIds.includes(o.id)?'border-teal-300 bg-teal-50/50':'border-neutral-200 bg-white'} cursor-pointer">
+                    <span class="tgl ${u.objectIds.includes(o.id)?'on':''}" onclick="toggleUserObject(${i},${o.id})"><span class="knob"></span></span>
+                    <span class="min-w-0"><span class="text-[12.5px] font-medium block truncate">${escapeHtml(o.name)}</span><span class="text-[11px] text-neutral-400">${escapeHtml(o.city)}</span></span>
+                  </label>`).join('')}
+              </div>
+            </div>`;
+        } else { // manager
+          panel = `
+            <div class="px-3.5 pb-3 pt-2 bg-neutral-50/60 border-t border-neutral-100">
+              ${roleBlock}
+              <div class="flex items-start gap-2 text-[12px] text-neutral-500 bg-white border border-neutral-200 rounded-lg px-3 py-2.5">
+                <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+                <span>Управляющий видит <b class="font-semibold">все объекты</b>, выручку и полностью управляет, кроме смены тарифа подписки.</span>
+              </div>
+            </div>`;
+        }
+      }
+      // правый блок строки: бейдж роли + (объекты для admin) + chevron
+      const objLabel = u.role === 'admin' ? `<span class="hidden sm:inline-flex items-center gap-1 text-[12px] text-neutral-500"><i data-lucide="building-2" class="w-3.5 h-3.5 text-neutral-400"></i> ${u.objectIds.length} об.</span>` : '';
+      return `
+      <div class="${i>0?'border-t border-neutral-100':''}">
+        <div class="px-3.5 py-3 flex items-center gap-3 ${clickable?'cursor-pointer hover:bg-neutral-50':''}" ${clickable?`onclick="toggleUser(${i})"`:''}>
+          <div class="w-9 h-9 rounded-full bg-neutral-200 grid place-items-center text-[13px] font-semibold text-neutral-600 shrink-0">${escapeHtml(u.name[0])}</div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap"><span class="text-[14px] font-semibold truncate">${escapeHtml(u.name)}</span>${ROLE_BADGE[u.role]}</div>
+            <div class="text-[12px] text-neutral-500 mono truncate">${escapeHtml(u.email)}</div>
+          </div>
+          ${objLabel}
+          ${clickable
+            ? `<i data-lucide="chevron-down" class="w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open?'rotate-180':''}"></i>`
+            : `<span class="text-[11px] text-neutral-400 shrink-0">роль не меняется</span>`}
+        </div>
+        ${panel}
+      </div>`;
+    }).join('');
+
+    const staffRows = STAFF.map((s, i) => {
+      const open = openStaff === i;
+      const picker = open ? `
+        <div class="px-3.5 pb-3 pt-1 bg-neutral-50/60 border-t border-neutral-100">
+          <div class="text-[12px] font-medium text-neutral-600 mb-2">К каким объектам привязан · получает коды доступа на них</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            ${OBJECTS.map((o) => `
+              <label class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border ${s.objectIds.includes(o.id)?'border-teal-300 bg-teal-50/50':'border-neutral-200 bg-white'} cursor-pointer">
+                <span class="tgl ${s.objectIds.includes(o.id)?'on':''}" onclick="toggleStaffObject(${i},${o.id})"><span class="knob"></span></span>
+                <span class="min-w-0"><span class="text-[12.5px] font-medium block truncate">${escapeHtml(o.name)}</span><span class="text-[11px] text-neutral-400">${escapeHtml(o.city)}</span></span>
+              </label>`).join('')}
+          </div>
+        </div>` : '';
+      return `
+      <div class="${i>0?'border-t border-neutral-100':''}">
+        <div class="px-3.5 py-3 flex items-center gap-3 cursor-pointer hover:bg-neutral-50" onclick="toggleStaff(${i})">
+          <div class="w-9 h-9 rounded-lg bg-amber-50 grid place-items-center shrink-0"><i data-lucide="hard-hat" class="w-[18px] h-[18px] text-amber-600"></i></div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap"><span class="text-[14px] font-semibold truncate">${escapeHtml(s.name)}</span><span class="text-[11.5px] font-medium px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600">${escapeHtml(s.role)}</span></div>
+            <div class="text-[12px] text-neutral-500 mono truncate">${escapeHtml(s.phone)} · ${escapeHtml(s.channel)}</div>
+          </div>
+          <div class="hidden sm:flex items-center gap-1 text-[12px] ${s.objectIds.length?'text-teal-700':'text-neutral-400'} shrink-0"><i data-lucide="building-2" class="w-3.5 h-3.5"></i> ${s.objectIds.length} об.</div>
+          <i data-lucide="chevron-down" class="w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open?'rotate-180':''}"></i>
+        </div>
+        ${picker}
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
+        <div class="min-w-0">
+          <h2 class="text-[16px] font-bold">Пользователи кабинета</h2>
+          <p class="text-[13px] text-neutral-500">Нажмите на пользователя, чтобы сменить роль и настроить права. Владельца изменить нельзя.</p>
+        </div>
+        <button onclick="toast('Приглашение: укажите email + роль (Управляющий / Администратор), отправим ссылку')" class="sm:ml-auto shrink-0 whitespace-nowrap w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="user-plus" class="w-4 h-4"></i> Пригласить</button>
+      </div>
+      <p class="text-[12px] text-neutral-400 mb-3">Администраторов может быть несколько — у каждого свой пул объектов и права (раскрываются по клику).</p>
+      ${card(rows,'!p-0 overflow-hidden')}
+
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3 mt-7">
+        <div class="min-w-0">
+          <h2 class="text-[16px] font-bold">Сотрудники без входа</h2>
+          <p class="text-[13px] text-neutral-500">Горничные и мастера: не заходят в кабинет. Нажмите на сотрудника, чтобы привязать объекты.</p>
+        </div>
+        <button onclick="toast('Добавление сотрудника: имя, роль, телефон, мессенджер')" class="sm:ml-auto shrink-0 whitespace-nowrap w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="plus" class="w-4 h-4"></i> Добавить</button>
+      </div>
+      ${card(staffRows,'!p-0 overflow-hidden')}`;
+  }
+  function toggleStaff(i) { openStaff = (openStaff === i ? null : i); renderPanel(); }
+  function toggleStaffObject(i, oid) {
+    event.stopPropagation();
+    const arr = STAFF[i].objectIds;
+    const k = arr.indexOf(oid);
+    if (k >= 0) arr.splice(k, 1); else arr.push(oid);
+    renderPanel(); toast('Привязка объектов обновлена');
+  }
+
+  // ════════════════════ 4. БИЛЛИНГ ════════════════════
+  function billingHtml() {
+    const payRows = PAYMENTS.map((p) => `
+      <div class="flex items-center gap-3 px-3.5 py-2.5 border-t border-neutral-100 text-[13px]">
+        <span class="mono text-neutral-500 w-24 shrink-0">${p.date}</span>
+        <span class="flex-1 min-w-0 truncate text-neutral-600">${escapeHtml(p.plan)}</span>
+        <span class="mono font-medium shrink-0">${p.sum}</span>
+        <span class="text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 shrink-0">оплачено</span>
+        <button onclick="toast('Скачивание документа — в реализации')" class="text-neutral-400 hover:text-teal-700 shrink-0" title="Документ"><i data-lucide="file-down" class="w-4 h-4"></i></button>
+      </div>`).join('');
+    return `
+      ${card(`
+        <div class="flex items-start gap-3 flex-wrap">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2"><h2 class="text-[16px] font-bold">Тариф Free</h2><span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">активен</span></div>
+            <p class="text-[12.5px] text-neutral-500 mt-0.5">Бесплатно: умные замки и календарь-шахматка. Полный AI-бронист — на платном тарифе.</p>
+          </div>
+          <button onclick="toast('Выбор тарифа — в реализации')" class="shrink-0 inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="arrow-up-circle" class="w-4 h-4"></i> Изменить тариф</button>
+        </div>
+        <div class="mt-4">
+          <div class="flex items-center justify-between text-[12.5px] mb-1.5"><span class="text-neutral-600 font-medium">Объекты</span><span class="mono text-neutral-500">6 из 10</span></div>
+          <div class="h-2 rounded-full bg-neutral-100 overflow-hidden"><div class="h-full bg-teal-600 rounded-full" style="width:60%"></div></div>
+          <p class="text-[11.5px] text-neutral-400 mt-1.5">При добавлении 11-го объекта — переход на платный тариф.</p>
+        </div>
+      `)}
+      ${card(`
+        ${blockHead('credit-card','Способы оплаты','Списываем автоматически в начале периода. Картой или по СБП.')}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Карта -->
+          <div class="rounded-lg border border-neutral-200 p-3 flex flex-col">
+            <div class="flex items-center gap-2.5">
+              <i data-lucide="credit-card" class="w-5 h-5 text-neutral-500 shrink-0"></i>
+              <div class="min-w-0 flex-1"><div class="flex items-center gap-1.5"><span class="text-[13px] font-medium mono">•••• 4242</span><span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">основной</span></div><div class="text-[11px] text-neutral-400">Карта · до 08/27</div></div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="toast('Обновление карты через ЮKassa')" class="text-[12px] font-medium px-2.5 py-1 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Обновить</button>
+                <button onclick="toast('Удалить способ оплаты — потребует подтверждения')" title="Удалить" class="w-7 h-7 grid place-items-center rounded-md border border-neutral-200 hover:border-red-300 text-neutral-400 hover:text-red-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+            <button onclick="toast('Добавление карты через ЮKassa')" class="mt-2.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-dashed border-neutral-300 hover:border-teal-700 text-[12.5px] font-medium text-neutral-600"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Добавить карту</button>
+          </div>
+          <!-- СБП -->
+          <div class="rounded-lg border border-neutral-200 p-3 flex items-center gap-3">
+            <div class="w-16 h-16 rounded-lg border border-neutral-200 grid place-items-center bg-white shrink-0"><i data-lucide="qr-code" class="w-10 h-10 text-neutral-800"></i></div>
+            <div class="min-w-0 flex-1">
+              <div class="text-[13px] font-medium">Оплата по СБП</div>
+              <p class="text-[11px] text-neutral-500 leading-snug mb-2">С телефона — ссылка, с компьютера — QR. Банк выбираете сами.</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="toast('Открыть ссылку оплаты СБП')" class="inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="link" class="w-3.5 h-3.5"></i> Ссылка</button>
+                <button onclick="toast('QR-код увеличен')" class="inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="qr-code" class="w-3.5 h-3.5"></i> QR</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-start gap-2 text-[11.5px] text-neutral-500 bg-neutral-50 rounded-lg px-3 py-2 mt-3">
+          <i data-lucide="shield" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600"></i><span>Платежи через ЮKassa, данные карты у нас не хранятся.</span>
+        </div>
+      `,'mt-4')}
+      ${card(`
+        ${blockHead('history','История платежей')}
+        <div class="-mx-4 -mb-1">${payRows}</div>
+      `,'mt-4')}`;
+  }
+
+  // ════════════════════ РЕФЕРАЛЬНАЯ ПРОГРАММА ════════════════════
+  function referralHtml() {
+    const funnel = [
+      { name:'Анна Петрова',   meta:'Оплатила · 02.06',     status:'Оплатила',  chip:'bg-teal-50 text-teal-700',        bonus:'+1 бонус начислен',          bcls:'text-teal-600',    bicon:'check-circle-2' },
+      { name:'Сергей Малов',   meta:'Подключён · 04.06',    status:'Подключён', chip:'bg-sky-50 text-sky-700',          bonus:'бонус после первой оплаты',  bcls:'text-amber-500',   bicon:'clock' },
+      { name:'+7 905 •••• 44', meta:'Был на демо · 05.06',  status:'На демо',   chip:'bg-amber-50 text-amber-700',      bonus:'—',                          bcls:'text-neutral-300', bicon:'minus' },
+      { name:'Ольга Кравцова', meta:'Приглашена · 06.06',   status:'Приглашена',chip:'bg-neutral-100 text-neutral-600', bonus:'—',                          bcls:'text-neutral-300', bicon:'minus' },
+    ];
+    const rows = funnel.map((r) => `
+      <div class="flex items-center gap-3 px-3.5 py-2.5 border-t border-neutral-100">
+        <div class="w-8 h-8 rounded-full bg-neutral-100 grid place-items-center text-[12px] font-semibold text-neutral-500 shrink-0">${r.name.replace(/[^А-Яа-яA-Za-z]/g,'').slice(0,1) || '•'}</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13px] font-medium text-neutral-900 truncate">${escapeHtml(r.name)}</div>
+          <div class="text-[11.5px] text-neutral-400">${r.meta}</div>
+        </div>
+        <div class="hidden sm:flex items-center gap-1.5 shrink-0"><i data-lucide="${r.bicon}" class="w-3.5 h-3.5 ${r.bcls}"></i><span class="text-[11.5px] text-neutral-500">${r.bonus}</span></div>
+        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${r.chip} shrink-0">${r.status}</span>
+      </div>`).join('');
+    const step = (n, icon, t, s) => `
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="${icon}" class="w-4 h-4 text-teal-600"></i></div>
+        <div><div class="text-[13px] font-semibold text-neutral-900">${n}. ${t}</div><div class="text-[12px] text-neutral-500 leading-snug">${s}</div></div>
+      </div>`;
+    return `
+      ${card(`
+        ${blockHead('gift','Ваши бонусы','Приглашайте коллег-хостов — за каждого, кто оплатит, вы получаете бонус.')}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white px-3.5 py-3 relative overflow-hidden">
+            <i data-lucide="sparkles" class="w-16 h-16 absolute -right-3 -bottom-3 text-white/10"></i>
+            <div class="flex items-center gap-1 text-[11px] font-medium text-teal-50"><i data-lucide="star" class="w-3.5 h-3.5 fill-amber-300 text-amber-300"></i> Начислено</div>
+            <div class="flex items-baseline gap-1 mt-1"><span class="text-[28px] font-bold leading-none">1</span><span class="text-[12px] font-medium text-teal-100">бонус</span></div>
+          </div>
+          <div class="rounded-xl border-2 border-dashed border-amber-200 bg-amber-50/50 px-3.5 py-3">
+            <div class="flex items-center gap-1 text-[11px] font-medium text-amber-700"><i data-lucide="star" class="w-3.5 h-3.5 text-amber-400"></i> В ожидании</div>
+            <div class="flex items-baseline gap-1 mt-1"><span class="text-[28px] font-bold leading-none text-neutral-800">1</span><span class="text-[12px] font-medium text-neutral-500">бонус</span></div>
+            <div class="text-[10.5px] text-neutral-500 mt-1 leading-tight">холд 30 дней</div>
+          </div>
+          <div class="rounded-xl border border-neutral-200 px-3.5 py-3">
+            <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-500"><i data-lucide="users" class="w-3.5 h-3.5"></i> Приглашено</div>
+            <div class="text-[28px] font-bold leading-none mt-1 text-neutral-800">4</div>
+          </div>
+          <div class="rounded-xl border border-neutral-200 px-3.5 py-3">
+            <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-500"><i data-lucide="badge-check" class="w-3.5 h-3.5"></i> Оплатили</div>
+            <div class="text-[28px] font-bold leading-none mt-1 text-neutral-800">1</div>
+          </div>
+        </div>
+      `)}
+      ${card(`
+        ${blockHead('link','Ваша реферальная ссылка','Делитесь ею в чатах и личке — приглашённый получит скидку на первый месяц.')}
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div class="flex-1 min-w-0 text-[13px] font-medium text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2.5 truncate mono">bronist.ru/r/mikhail-k8x2</div>
+          <button onclick="toast('Ссылка скопирована')" class="shrink-0 inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3.5 py-2.5 rounded-lg bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="copy" class="w-4 h-4"></i> Копировать</button>
+        </div>
+        <div class="mt-3">
+          <div class="text-[12px] text-neutral-500 mb-1.5">Готовый текст для отправки:</div>
+          <div class="text-[12.5px] text-neutral-600 leading-snug bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2.5">Веду брони на автопилоте через Бронист — AI отвечает гостям 24/7 и сам делает допродажи. Попробуй по моей ссылке, будет скидка на первый месяц 👉 bronist.ru/r/mikhail-k8x2</div>
+          <div class="flex flex-wrap gap-2 mt-2.5">
+            <button onclick="toast('Отправить в Telegram')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-lg border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="send" class="w-4 h-4 text-teal-600"></i> Telegram</button>
+            <button onclick="toast('Отправить в WhatsApp')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-lg border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="message-circle" class="w-4 h-4 text-teal-600"></i> WhatsApp</button>
+            <button onclick="toast('Текст скопирован')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-lg border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="copy" class="w-4 h-4 text-teal-600"></i> Скопировать текст</button>
+          </div>
+        </div>
+      `,'mt-4')}
+      ${card(`
+        ${blockHead('list-checks','Как это работает')}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          ${step(1,'share-2','Делитесь ссылкой','Отправляете коллеге ссылку или готовый текст.')}
+          ${step(2,'credit-card','Коллега оплачивает','Бонус начисляется при его первой оплате.')}
+          ${step(3,'gift','Получаете бонус','Тратите в Биллинге. Холд 30 дней от возвратов.')}
+        </div>
+        <div class="flex items-start gap-2 text-[11.5px] text-neutral-500 bg-neutral-50 rounded-lg px-3 py-2 mt-4">
+          <i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600"></i><span>Один уровень рефералов. Подробнее — в <a onclick="openOffer()" class="text-teal-700 font-medium cursor-pointer underline decoration-teal-300 underline-offset-2">оферте программы</a>.</span>
+        </div>
+      `,'mt-4')}
+      ${card(`
+        ${blockHead('users','Ваши приглашения')}
+        <div class="-mx-4 -mb-1">${rows}</div>
+      `,'mt-4')}`;
+  }
+
+  // ════════════════════ 5. ИНТЕГРАЦИИ ════════════════════
+  const KIND = {
+    webhook: { badge:'Вебхук', icon:'webhook', cls:'bg-teal-50 text-teal-700',
+               desc:'Брони прилетают на ваш секретный вебхук-URL. Каталог объектов — по ссылке-фиду.' },
+    apikey:  { badge:'API-ключ', icon:'key-round', cls:'bg-teal-50 text-teal-700',
+               desc:'Подключаете API-ключ — Бронист сам забирает брони (автозагрузка + кнопка вручную).' },
+    ical:    { badge:'iCal-фид', icon:'rss', cls:'bg-neutral-100 text-neutral-600',
+               desc:'Импорт занятости по ссылке-фиду .ics. Контактов гостя в iCal нет — только даты.' },
+  };
+  function kindBadge(kind) {
+    const k = KIND[kind];
+    return `<span class="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded ${k.cls}"><i data-lucide="${k.icon}" class="w-3 h-3"></i> ${k.badge}</span>`;
+  }
+  function integrationsHtml() {
+    // карточки сервисов
+    const services = INTEG.map((s) => `
+      <div class="bg-white rounded-xl border border-neutral-200 p-3.5 flex flex-col">
+        <div class="flex items-start gap-3">
+          <span class="w-10 h-10 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="${s.icon}" class="w-5 h-5 text-neutral-600"></i></span>
+          <div class="min-w-0 flex-1"><div class="text-[14px] font-semibold">${escapeHtml(s.name)}</div>${s.meta?`<div class="text-[12px] text-neutral-400 mono">${escapeHtml(s.meta)}</div>`:''}</div>
+          ${statusBadge(s.status)}
+        </div>
+        <p class="text-[12.5px] text-neutral-500 mt-2 leading-snug flex-1">${escapeHtml(s.desc)}</p>
+        <div class="mt-2.5">
+          ${s.status==='connected'
+            ? `<button onclick="toast('Настройки «${escapeHtml(s.name)}»')" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Настроить</button>`
+            : `<button onclick="toast('Подключение «${escapeHtml(s.name)}»')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Подключить</button>`}
+        </div>
+      </div>`).join('');
+
+    // PMS-коннекторы
+    const pmsCards = PMS.map((p) => `
+      <div class="bg-white rounded-xl border border-neutral-200 p-3.5 flex flex-col">
+        <div class="flex items-start gap-2.5">
+          <span class="w-9 h-9 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="calendar-sync" class="w-[18px] h-[18px] text-teal-600"></i></span>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[13.5px] font-semibold">${escapeHtml(p.name)}</span>${p.popular?'<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">популярная</span>':''}</div>
+            ${p.meta?`<div class="text-[11.5px] text-neutral-400 mono">${escapeHtml(p.meta)}</div>`:''}
+          </div>
+          ${p.status==='connected'?statusBadge('connected'):''}
+        </div>
+        <div class="mt-2.5 mb-1.5">${kindBadge(p.kind)}</div>
+        <p class="text-[11.5px] text-neutral-500 leading-snug mb-2.5 flex-1">${KIND[p.kind].desc}</p>
+        <div class="mt-auto flex items-center gap-1.5 flex-wrap">
+          ${p.status==='connected'
+            ? `<button onclick="toast('Настройки «${escapeHtml(p.name)}»')" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Настроить</button>
+               ${p.kind==='apikey'?`<button onclick="toast('Загрузка броней из «${escapeHtml(p.name)}»')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Загрузить брони</button>`:''}`
+            : `<button onclick="toast('Подключение «${escapeHtml(p.name)}»: ${p.kind==='webhook'?'выдаём секретный вебхук-URL + ссылку-фид':p.kind==='apikey'?'вставьте API-ключ':'вставьте ссылку iCal-фида'}')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Подключить</button>`}
+        </div>
+      </div>`).join('');
+
+    const pmsConnected = PMS.some((p) => p.status==='connected' && (p.kind==='webhook' || p.kind==='apikey'));
+
+    // OTA-площадки (глобальный toggle)
+    const otaRows = OTA.map((o, i) => `
+      <label class="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer ${i>0?'border-t border-neutral-100':''}">
+        <span class="tgl ${o.on?'on':''}" onclick="this.classList.toggle('on'); toast('«${escapeHtml(o.name)}» ${o.on?'скрыта в карточках объектов':'показана в карточках объектов'}'); ${''}"><span class="knob"></span></span>
+        <span class="text-[13px] font-medium">${escapeHtml(o.name)}</span>
+      </label>`).join('');
+
+    return `
+      <!-- Источники броней — ключевой блок -->
+      <div class="flex items-center gap-2 mb-1"><i data-lucide="calendar-sync" class="w-[18px] h-[18px] text-teal-600"></i><h2 class="text-[16px] font-bold">Источники броней</h2></div>
+      <p class="text-[13px] text-neutral-500 mb-3">Откуда Бронист получает брони. Конкретные ссылки и маппинг — в карточке каждого объекта.</p>
+
+      <div class="flex items-start gap-2 text-[12px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2.5 mb-4">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+        <span>Каждый источник получает брони по-своему: <b class="font-semibold">вебхук</b> (RealtyCalendar шлёт на наш секретный URL), <b class="font-semibold">API-ключ</b> (TravelLine — забираем по ключу), <b class="font-semibold">iCal-фид</b> (импорт занятости). Это <b class="font-semibold">источники броней</b>, не каналы диалога (те — в <a onclick="goScreen('automation')" class="font-semibold text-teal-700 underline cursor-pointer">Автоматизация → Каналы</a>).</span>
+      </div>
+
+      <h3 class="text-[13px] font-semibold text-neutral-700 mb-2">PMS-системы и channel-менеджеры</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">${pmsCards}</div>
+
+      <h3 class="text-[13px] font-semibold text-neutral-700 mb-1">OTA-площадки (через iCal)</h3>
+      <p class="text-[12.5px] text-neutral-500 mb-2">Отметьте, с какими площадками работаете — только они появятся в карточках объектов для вставки ссылки.</p>
+      ${pmsConnected ? `<div class="flex items-start gap-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5 mb-2">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-amber-600"></i>
+        <span>У вас подключён channel-менеджер (TravelLine) — он уже агрегирует все площадки. <b class="font-semibold">iCal обычно не нужен</b>, включайте только площадки, которых нет в PMS.</span>
+      </div>` : ''}
+      ${card(otaRows,'!p-0 overflow-hidden')}
+
+      <!-- Сервисы -->
+      <h2 class="text-[16px] font-bold mt-7 mb-1">Сервисы</h2>
+      <p class="text-[13px] text-neutral-500 mb-3">Замки, приём платежей и вход через OAuth.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${services}</div>`;
+  }
+
+  // ════════════════════ 6. УВЕДОМЛЕНИЯ ════════════════════
+  function notifHtml() {
+    // ячейка канала: на mobile — иконка над toggle; на desktop — только toggle (названия в шапке)
+    const cell = (chIcon, on) => `
+      <span class="flex flex-col items-center justify-end gap-1 w-16 shrink-0">
+        <i data-lucide="${chIcon}" class="w-3.5 h-3.5 text-neutral-400 sm:hidden"></i>
+        <span class="tgl ${on?'on':''}" onclick="this.classList.toggle('on'); toast('Настройка изменена')"><span class="knob"></span></span>
+      </span>`;
+    // шапка с названиями каналов — только desktop
+    const head = `
+      <div class="hidden sm:flex items-center gap-2 px-3.5 py-2 border-b border-neutral-200 bg-neutral-50/50">
+        <span class="w-8 shrink-0"></span>
+        <span class="flex-1"></span>
+        <span class="flex gap-1">
+          <span class="w-16 text-center text-[11px] font-semibold text-neutral-500">Email</span>
+          <span class="w-16 text-center text-[11px] font-semibold text-neutral-500">Messenger</span>
+          <span class="w-16 text-center text-[11px] font-semibold text-neutral-500">Push</span>
+        </span>
+      </div>`;
+    const rows = NOTIF.map((n, i) => `
+      <div class="flex items-center gap-2 px-3.5 py-3 ${i>0?'border-t border-neutral-100':''}">
+        <span class="w-8 h-8 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="${n.icon}" class="w-4 h-4 text-neutral-500"></i></span>
+        <span class="flex-1 min-w-0">
+          <span class="text-[13.5px] font-semibold block truncate">${escapeHtml(n.ev)}</span>
+          <span class="text-[11.5px] text-neutral-400 block truncate">${escapeHtml(n.sub)}</span>
+        </span>
+        <span class="flex items-end gap-1 shrink-0">
+          ${cell('mail', n.email)}
+          ${cell('message-circle', n.msg)}
+          ${cell('smartphone', n.push)}
+        </span>
+      </div>`).join('');
+    return `
+      ${blockHead('bell','Что вы получаете','Группы событий. Каналы: Email · Мессенджер (Telegram/MAX) · Push.')}
+      ${card(head + rows, '!p-0 overflow-hidden')}
+      <div class="flex items-start gap-2 text-[12px] text-neutral-500 bg-white border border-neutral-200 rounded-lg px-3 py-2.5 mt-3">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+        <span>Это ваши личные уведомления. Сообщения <b class="font-semibold">гостям</b> настраиваются в разделе «Автоматизация».</span>
+      </div>`;
+  }
+
+  // ════════════════════ 7. АУДИТ ════════════════════
+  function auditHtml() {
+    const rows = AUDIT.map((a, i) => `
+      <div class="flex items-start gap-3 px-3.5 py-2.5 ${i>0?'border-t border-neutral-100':''} text-[13px]">
+        <span class="mono text-neutral-400 text-[12px] w-32 shrink-0 hidden sm:block">${a.time}</span>
+        <div class="min-w-0 flex-1">
+          <div class="font-medium truncate">${escapeHtml(a.act)}</div>
+          <div class="text-[12px] text-neutral-500 flex items-center gap-2 flex-wrap"><span>${escapeHtml(a.who)}</span><span class="text-neutral-300">·</span><span class="mono text-[11px]">${a.ip}</span><span class="mono text-[11px] sm:hidden text-neutral-400">${a.time}</span></div>
+        </div>
+      </div>`).join('');
+    return `
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+        <div class="min-w-0">
+          <h2 class="text-[16px] font-bold">Аудит действий</h2>
+          <p class="text-[13px] text-neutral-500">Технический лог для 152-ФЗ. Бизнес-события гостей и замков — в разделе «Журнал».</p>
+        </div>
+        <div class="sm:ml-auto flex items-center gap-2 shrink-0">
+          ${sel(['Все пользователи','Михаил','Анна Петрова','Радик Сафин'])}
+          <button onclick="toast('Экспорт лога — в реализации')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700 whitespace-nowrap"><i data-lucide="download" class="w-4 h-4"></i> Экспорт</button>
+        </div>
+      </div>
+      ${card(rows,'!p-0 overflow-hidden')}`;
+  }
+
+  // ════════════════════ ОБЩЕЕ ════════════════════
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer() { document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer() { document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport() { document.getElementById('supportMenu').classList.toggle('hidden'); }
+  function toggleProfile() { document.getElementById('profileMenu').classList.toggle('hidden'); }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#supportMenu') && !e.target.closest('button[onclick*="toggleSupport"]')) document.getElementById('supportMenu').classList.add('hidden');
+    if (!e.target.closest('#profileMenu') && !e.target.closest('button[onclick*="toggleProfile"]')) document.getElementById('profileMenu').classList.add('hidden');
+  });
+  function toast(msg, type){
+    const icons={success:['check-circle','#34d399'],warn:['alert-triangle','#fbbf24'],error:['alert-circle','#f87171'],info:['info','#5eead4']};
+    const [ic,col]=icons[type]||icons.info;
+    const el=document.getElementById('toast');
+    el.innerHTML=`<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt=setTimeout(()=>el.classList.add('hidden'),1900);
+  }
+  function goScreen(key){ try{ if(window.top&&window.top!==window){window.top.location.hash=key;} else {toast('Переход → '+key,'info');} }catch(e){ toast('Переход → '+key,'info'); } }
+
+  // init — на desktop показываем сразу деталь первого подраздела; на mobile стартуем со списка
+  renderMenu();
+  renderPanel();
+  if (window.innerWidth > 768) document.getElementById('settingsGrid').classList.add('mobile-detail');
+  lucide.createIcons();
+  function openOffer(){ const m=document.getElementById('offerModal'); m.classList.remove('hidden'); document.body.style.overflow='hidden'; lucide.createIcons(); }
+  function closeOffer(){ document.getElementById('offerModal').classList.add('hidden'); document.body.style.overflow=''; }
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeOffer(); });
+</script>
+
+<!-- Модальное окно: оферта реферальной программы -->
+<div id="offerModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40" onclick="closeOffer()"></div>
+  <div class="relative bg-white rounded-2xl border border-neutral-200 shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div class="flex items-start gap-3 px-5 py-4 border-b border-neutral-100 shrink-0">
+      <div class="w-9 h-9 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="file-text" class="w-5 h-5 text-teal-600"></i></div>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-[15px] font-bold text-neutral-900">Оферта реферальной программы Бронист</h2>
+        <p class="text-[12px] text-neutral-500">Редакция от 07.06.2026</p>
+      </div>
+      <button onclick="closeOffer()" class="w-8 h-8 grid place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 shrink-0"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="overflow-y-auto px-5 py-4 text-[13px] leading-relaxed text-neutral-700">
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">1. Общие положения</h3>
+      <p class="mb-1">1.1. Оферта определяет условия участия в реферальной программе сервиса Бронист (далее — Сервис). Оператор — ИП (реквизиты в разделе «Профиль компании»).</p>
+      <p class="mb-4">1.2. Участие добровольное и бесплатное. Получая реферальную ссылку и пользуясь ею, вы принимаете условия настоящей оферты.</p>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">2. Термины</h3>
+      <p class="mb-1"><b>Реферер</b> — действующий пользователь Сервиса, который делится реферальной ссылкой.</p>
+      <p class="mb-1"><b>Приглашённый</b> — новый пользователь, зарегистрировавшийся по ссылке Реферера.</p>
+      <p class="mb-4"><b>Бонус</b> — вознаграждение Реферера, начисляемое на внутренний баланс аккаунта.</p>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">3. Условия участия</h3>
+      <p class="mb-1">3.1. Реферер делится персональной ссылкой или кодом.</p>
+      <p class="mb-1">3.2. Приглашённый регистрируется по ссылке и подключается к Сервису.</p>
+      <p class="mb-4">3.3. Бонус начисляется при <b>первой оплате</b> Приглашённым платного тарифа.</p>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">4. Размер и форма вознаграждения</h3>
+      <p class="mb-1">4.1. Вознаграждение Реферера — бонус на внутренний баланс (доп. функция, дополнительный слот объекта или период подписки). Бонус не является денежными средствами и не подлежит выводу.</p>
+      <p class="mb-1">4.2. Приглашённый получает скидку на первый платёж.</p>
+      <div class="flex items-start gap-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-2">
+        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500"></i><span>Точный размер и форма вознаграждения публикуются в действующей редакции программы и будут объявлены при запуске тарифной сетки.</span>
+      </div>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1 mt-4">5. Начисление и холд</h3>
+      <p class="mb-1">5.1. Бонус резервируется при первой оплате Приглашённого и становится доступным через <b>30 дней</b> (период возможных возвратов).</p>
+      <p class="mb-4">5.2. При возврате или отмене оплаты Приглашённым в течение холда бонус аннулируется.</p>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">6. Ограничения</h3>
+      <p class="mb-1">6.1. Программа одноуровневая: вознаграждение начисляется только за непосредственно приглашённых пользователей.</p>
+      <p class="mb-1">6.2. Засчитывается только уникальный оплативший Приглашённый.</p>
+      <p class="mb-1">6.3. Запрещены самоприглашение, накрутка и спам. Оператор вправе аннулировать бонусы при признаках недобросовестных действий.</p>
+      <p class="mb-4">6.4. Действует общий лимит на суммарный бонус (публикуется в действующей редакции).</p>
+
+      <h3 class="text-[13.5px] font-bold text-neutral-900 mb-1">7. Заключительные положения</h3>
+      <p class="mb-1">7.1. Оператор вправе изменять условия программы, публикуя новую редакцию оферты.</p>
+      <p>7.2. Программа может быть приостановлена или завершена с предварительным уведомлением участников.</p>
+    </div>
+    <div class="px-5 py-3 border-t border-neutral-100 flex justify-end shrink-0">
+      <button onclick="closeOffer()" class="text-[13px] font-medium px-4 py-2 rounded-lg bg-teal-700 text-white hover:bg-teal-800">Понятно</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

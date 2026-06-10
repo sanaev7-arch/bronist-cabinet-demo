@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Календарь</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* ── ШАХМАТКА ── */
+  .sb-scroller { overflow-x: auto; }
+  .sb-namecol { width: 188px; min-width: 188px; }
+  .sb-track { position: relative; flex: 1 1 0%; min-width: 0; }
+  .seg {
+    position: absolute; top: 6px; bottom: 6px; z-index: 6;
+    border-width: 1px; border-radius: 6px; padding: 0 6px;
+    display: flex; align-items: center; gap: 5px; cursor: pointer;
+    overflow: hidden; white-space: nowrap; font-size: 11.5px;
+    transition: box-shadow .12s ease, filter .12s ease, opacity .12s ease;
+  }
+  .seg:hover { box-shadow: inset 0 0 0 1.5px #0f766e; z-index: 8; filter: brightness(.97); }
+  /* перетаскиваемая бронь — остаётся видимой и явно «взята» (не исчезает) */
+  .seg.dragging { opacity: .9; box-shadow: inset 0 0 0 2px #0f766e; cursor: grabbing; z-index: 20; }
+  /* Kanban: плавающий клон при перетаскивании (работает и на touch) */
+  .kb-ghost { position:fixed; z-index:95; pointer-events:none; opacity:.92; transform:translate(-50%,-50%); box-shadow:0 10px 28px rgba(0,0,0,.2); border-radius:8px; }
+  .kb-card { touch-action: pan-y; }
+  .grp-hi { outline: 2px solid #8b5cf6; outline-offset: -2px; }
+  .seg.grp-hi { z-index: 9; }
+  .seg.is-cancelled { opacity: .55; }
+  .seg.is-cancelled .seg-guest { text-decoration: line-through; }
+  /* строка-цель при переносе брони — мягкая заливка БЕЗ teal-рамки (рамка читалась как «создать») */
+  .row-drop { background: rgba(15,118,110,.08); }
+  /* во время переноса прячем hover-«+» в ячейках, чтобы не путать с созданием */
+  .sb-moving .cell-bg span { display: none !important; }
+  /* выделение под новую бронь */
+  .sel-box { position: absolute; top: 4px; bottom: 4px; z-index: 12; border-radius: 6px;
+    background: rgba(13,148,136,.10); box-shadow: inset 0 0 0 2px #2dd4bf; pointer-events: none; }
+  .cal-header { cursor: grab; }
+  .cal-header:active { cursor: grabbing; }
+  /* листание — жестом трекпада/колесом (deltaX); захват мышью только переносит брони */
+  .seg { cursor: grab; }
+  .seg.dragging { cursor: grabbing; }
+  .cell-bg { cursor: cell; }
+  .cell-bg { position: relative; }
+
+  /* segmented switch */
+  .seg-switch button.on { background:#0f766e; color:#fff; }
+
+  /* ── плотность шахматки: компакт ужимает строку/сегмент ради 50–150 объектов ── */
+  .dens-compact .seg { top:3px; bottom:3px; font-size:10.5px; gap:3px; padding:0 4px; border-radius:4px; }
+  .dens-compact .seg .seg-guest { font-weight:500; }
+  /* заголовок группы-пространства (sticky слева, на всю ширину) */
+  .sb-group { user-select:none; }
+
+  /* ── DESKTOP-раскладка тулбара (как было: ряд1 Шахматка/Список+Поиск; ряд2 Классика/Доска+Сегодня+дни+фильтры) ── */
+  .tb-views   { order: 1; }
+  .tb-search  { order: 2; }
+  .tb-break   { order: 3; flex-basis: 100%; height: 0; }   /* принудительный перенос строки */
+  .tb-mode    { order: 4; }
+  .tb-nav     { order: 5; }
+  .tb-filters { order: 6; }
+  .tb-actions { order: 2; margin-left: auto; }              /* кнопки Лид/Создать бронь — в ряд с Шахматкой, справа */
+
+  /* список — подсветка совместной брони */
+  tr.grp-hi { outline: none !important; background:#f5f3ff !important; box-shadow: inset 3px 0 0 #8b5cf6; }
+
+  /* Kanban DnD */
+  .kb-card { cursor: grab; }
+  .kb-card:active { cursor: grabbing; }
+  .kb-card.dragging { opacity:.4; }
+  .kb-col.drop-target { background:#ecfeff; outline:2px dashed #2dd4bf; outline-offset:-2px; }
+  /* воронка шире экрана скроллится ВНУТРИ доски, не двигает всю страницу */
+  #kanbanWrap { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
+
+  .bk-input { font-size: 14px; }
+  /* активный таб карточки больше не используется — карточка одностраничная */
+
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important; transform: translateX(-100%);
+      transition: transform 200ms ease; z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0); overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    .bk-input { font-size: 16px !important; }
+    .sb-namecol { width: 132px !important; min-width: 132px !important; }
+    #period { white-space: nowrap; }
+    .sb-legend { display: none !important; }
+    .sb-tips { display: none !important; }
+    #kanbanCols { grid-template-columns: repeat(5, 78vw) !important; }
+    #kanbanWrap { overflow-x: auto; }
+
+    /* ── мобильный тулбар: порядок Шахматка/Список → Классика/Доска → Сегодня+дни → Поиск → фильтры (п.3 v3) ── */
+    #toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+    #toolbar > div { width: 100%; }
+    .tb-views { order: 1; } .tb-mode { order: 2; } .tb-nav { order: 3; } .tb-search { order: 4; } .tb-filters { order: 5; }
+    .tb-actions { order: 0; margin-left: 0; width: 100%; }
+    .tb-actions button { flex: 1; justify-content: center; }
+    .tb-break { display: none; }
+    .tb-views, .tb-mode { display: flex; }
+    .tb-views button, .tb-mode button { flex: 1; justify-content: center; }
+    .tb-nav { justify-content: space-between; gap: 8px; }
+    .tb-nav .seg-switch { flex: 1; }
+    .tb-nav .seg-switch button { flex: 1; justify-content: center; }
+    .tb-search { max-width: none !important; }
+    .tb-filters select { flex: 1; }
+    /* футер карточки — кнопки не ломаются в 2 строки (п.5) */
+    #bkFoot { flex-wrap: wrap; }
+    #bkFoot button { white-space: nowrap; }
+  }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5; название экрана — Календарь) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Календарь</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <div class="content-pad max-w-[1320px] mx-auto px-6 py-6">
+
+        <!-- ── ОБЩИЙ ТУЛБАР ── -->
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <div>
+            <h1 class="text-[20px] font-bold tracking-tight">Календарь</h1>
+            <p id="hdrSub" class="text-[13px] text-neutral-500"></p>
+          </div>
+        </div>
+
+        <!-- ── ТУЛБАР (плоский; DOM-порядок = мобильный порядок п.3 v3) ── -->
+        <div id="toolbar" class="flex items-center gap-2.5 mb-4 flex-wrap">
+          <div class="tb-views seg-switch flex items-center border border-neutral-200 rounded-lg p-0.5 bg-white">
+            <button id="vwBoard" onclick="setView('board')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md text-neutral-600"><i data-lucide="calendar-range" class="w-4 h-4"></i> Шахматка</button>
+            <button id="vwList" onclick="setView('list')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md text-neutral-600"><i data-lucide="list" class="w-4 h-4"></i> Список</button>
+          </div>
+          <div class="tb-mode seg-switch flex items-center border border-neutral-200 rounded-lg p-0.5 bg-white">
+            <button id="modeClassic" onclick="setBoardMode('classic')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md text-neutral-600"><i data-lucide="calendar-days" class="w-4 h-4"></i> Классика</button>
+            <button id="modeKanban" onclick="setBoardMode('kanban')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md text-neutral-600"><i data-lucide="kanban-square" class="w-4 h-4"></i> Доска</button>
+          </div>
+            <div id="classicNav" class="tb-nav flex items-center gap-2.5 flex-wrap">
+              <div class="seg-switch flex items-center border border-neutral-200 rounded-lg p-0.5 bg-white">
+                <button id="z7" onclick="setZoom(7)" class="text-[12px] font-medium px-2.5 py-1 rounded-md text-neutral-600">7 дн</button>
+                <button id="z14" onclick="setZoom(14)" class="text-[12px] font-medium px-2.5 py-1 rounded-md text-neutral-600">14 дн</button>
+                <button id="z30" onclick="setZoom(30)" class="text-[12px] font-medium px-2.5 py-1 rounded-md text-neutral-600">30 дн</button>
+              </div>
+              <div class="seg-switch flex items-center border border-neutral-200 rounded-lg p-0.5 bg-white" title="Плотность строк">
+                <button id="densComfort" onclick="setDensity('comfort')" title="Комфорт — крупно, с фото" class="inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1 rounded-md text-neutral-600"><i data-lucide="rows-3" class="w-3.5 h-3.5"></i> Комфорт</button>
+                <button id="densCompact" onclick="setDensity('compact')" title="Компакт — плотно, для многих объектов" class="inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1 rounded-md text-neutral-600"><i data-lucide="rows-4" class="w-3.5 h-3.5"></i> Компакт</button>
+              </div>
+            </div>
+
+          <div class="tb-search search-box flex items-center gap-2 h-9 px-3 rounded-lg border border-neutral-200 bg-white text-[13px] flex-1 min-w-[200px] max-w-[340px]">
+            <i data-lucide="search" class="w-4 h-4 text-neutral-400"></i>
+            <input id="bkSearch" oninput="rerender()" aria-label="Поиск по броням" placeholder="Найти бронь, гостя или код…" class="bk-input flex-1 bg-transparent outline-none placeholder:text-neutral-400" />
+          </div>
+
+          <div class="tb-break"></div>
+
+          <div class="tb-filters filters-row flex items-center gap-2 ml-auto flex-wrap">
+              <select id="fltSpace" onchange="rerender()" aria-label="Пространство" class="bk-input h-8 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12.5px] focus:outline-none focus:border-teal-700"></select>
+              <select id="fltStatus" onchange="rerender()" aria-label="Статус" class="bk-input h-8 rounded-lg border border-neutral-200 bg-white px-2.5 text-[12.5px] focus:outline-none focus:border-teal-700">
+                <option value="all">Все статусы</option>
+                <option value="confirmed">Подтверждённые</option>
+                <option value="prepay">Предоплата</option>
+                <option value="ota">Новые (OTA)</option>
+                <option value="cancelled">Отменённые</option>
+              </select>
+            </div>
+
+            <div class="tb-actions flex items-center gap-2.5">
+              <button id="leadAddBtn" onclick="openCreateLead()" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-300 text-neutral-700 bg-white hover:border-teal-700 hover:text-teal-700">
+                <i data-lucide="phone-incoming" class="w-4 h-4"></i> Лид
+              </button>
+              <button onclick="openCreate()" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">
+                <i data-lucide="plus" class="w-4 h-4"></i> Создать бронь
+              </button>
+            </div>
+        </div>
+
+        <!-- ════════ ВИД 1: ШАХМАТКА ════════ -->
+        <section id="boardView">
+          <!-- КЛАССИКА -->
+          <div id="classicPanel" class="relative bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <!-- панель управления НАД шахматкой: слева навигация, справа легенда -->
+            <div class="flex items-center justify-between gap-x-4 gap-y-2 px-3 py-2 border-b border-neutral-200 flex-wrap">
+              <div class="flex items-center gap-2.5 shrink-0">
+                <div class="flex items-center border border-neutral-200 rounded-lg bg-white overflow-hidden">
+                  <button onclick="shiftWindow(-7)" title="Назад" class="w-8 h-8 grid place-items-center text-neutral-500 hover:text-teal-700 hover:bg-neutral-50"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                  <button onclick="goToday()" class="text-[12.5px] font-medium px-2.5 h-8 text-neutral-700 hover:bg-neutral-50 border-x border-neutral-200">Сегодня</button>
+                  <button onclick="shiftWindow(7)" title="Вперёд" class="w-8 h-8 grid place-items-center text-neutral-500 hover:text-teal-700 hover:bg-neutral-50"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                </div>
+                <span id="period" class="text-[13px] font-semibold text-neutral-700 mono"></span>
+              </div>
+              <div class="sb-legend flex items-center gap-x-3.5 gap-y-1.5 flex-wrap text-[11.5px] text-neutral-600">
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300"></span> Подтверждена</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-200 border border-amber-300"></span> Предоплата</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-neutral-200 border border-neutral-300"></span> Новая / OTA</span>
+                <span class="inline-flex items-center gap-1.5"><i data-lucide="users" class="w-3.5 h-3.5 text-teal-600"></i> Совместная</span>
+                <span class="mx-0.5 text-neutral-300">·</span>
+                <span class="inline-flex items-center gap-1.5">Код: <span class="w-2 h-2 rounded-full bg-emerald-500"></span> загружен <span class="w-2 h-2 rounded-full bg-amber-500"></span> грузится <span class="w-2 h-2 rounded-full bg-red-500"></span> нет</span>
+              </div>
+            </div>
+            <div id="sbScroller" class="sb-scroller" style="touch-action:pan-x; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;">
+              <div id="sbInner" style="width:100%;"></div>
+            </div>
+            <p class="sb-tips text-[11.5px] text-neutral-400 px-4 py-2 border-t border-neutral-100">
+              <i data-lucide="mouse-pointer-2" class="inline w-3 h-3"></i> клик по пустому дню — новая бронь · свайп / колёсико вбок — листать даты · тянуть полосу на другой объект — перенос брони · клик по полосе — карточка
+            </p>
+          </div>
+
+          <!-- ДОСКА (KANBAN) -->
+          <div id="kanbanPanel" class="hidden">
+            <div id="kanbanWrap">
+              <div id="kanbanCols" class="grid gap-3" style="grid-template-columns:repeat(5,minmax(180px,1fr));"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ════════ ВИД 2: СПИСОК ════════ -->
+        <section id="listView" class="hidden">
+          <div id="statusChips" class="flex items-center gap-1.5 flex-wrap mb-3"></div>
+          <div id="listBody"></div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Карточка брони (всё на одном экране, без табов) ── -->
+<div id="bookingModal" class="hidden fixed inset-0 z-[66] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);" onclick="if(event.target===this)closeBooking()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div id="bkHead" class="shrink-0 border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="bkBody" class="flex-1 overflow-y-auto px-5 py-4"></div>
+    <div id="bkFoot" class="shrink-0 border-t border-neutral-200 px-5 py-3 flex items-center gap-2"></div>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Объект (быстрый просмотр из шахматки, #26) ── -->
+<div id="objModal" class="hidden fixed inset-0 z-[68] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);" onclick="if(event.target===this)closeObjModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+    <div id="omHead" class="border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="omBody" class="px-5 py-4 space-y-3"></div>
+    <div class="border-t border-neutral-200 px-5 py-3 flex items-center justify-end gap-2">
+      <button onclick="closeObjModal()" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 text-neutral-600 hover:border-neutral-300">Закрыть</button>
+      <button onclick="goScreen('objects')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="external-link" class="w-4 h-4"></i> Открыть карточку</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Новая бронь (крупнее) ── -->
+<div id="createModal" class="hidden fixed inset-0 z-[70] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[94vh] flex flex-col">
+    <div class="px-6 py-5 border-b border-neutral-100 flex items-center gap-3 shrink-0">
+      <span class="w-10 h-10 rounded-xl bg-teal-50 grid place-items-center"><i data-lucide="calendar-plus" class="w-5 h-5 text-teal-600"></i></span>
+      <div>
+        <div class="text-[17px] font-semibold">Новая бронь</div>
+        <div class="text-[13px] text-neutral-500">Ручная бронь — когда бронь не пришла в календарь автоматически</div>
+      </div>
+      <button onclick="closeCreate()" class="ml-auto w-9 h-9 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="px-6 py-5 space-y-4 overflow-y-auto">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5">
+          <label for="c_obj" class="text-[12.5px] font-medium text-neutral-600">Объект*</label>
+          <select id="c_obj" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 bg-white focus:outline-none focus:border-teal-700"></select>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label for="c_src" class="text-[12.5px] font-medium text-neutral-600">Источник брони</label>
+          <select id="c_src" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 bg-white focus:outline-none focus:border-teal-700">
+            <option value="Вручную">Внесена вручную</option>
+            <option value="Авито">Авито</option>
+            <option value="Суточно">Суточно</option>
+            <option value="Островок">Островок</option>
+            <option value="Циан">Циан</option>
+            <option value="Прямая">Прямая (звонок / сайт)</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5"><label for="c_guest" class="text-[12.5px] font-medium text-neutral-600">Гость*</label><input id="c_guest" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" placeholder="Имя гостя" /></div>
+        <div class="flex flex-col gap-1.5"><label for="c_phone" class="text-[12.5px] font-medium text-neutral-600">Телефон</label><input id="c_phone" class="bk-input mono rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" placeholder="+7 …" /></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5"><label for="c_in" class="text-[12.5px] font-medium text-neutral-600">Заезд*</label><input id="c_in" type="date" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" /></div>
+        <div class="flex flex-col gap-1.5"><label for="c_out" class="text-[12.5px] font-medium text-neutral-600">Выезд*</label><input id="c_out" type="date" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" /></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5"><label for="c_ch" class="text-[12.5px] font-medium text-neutral-600">Канал</label>
+          <select id="c_ch" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 bg-white focus:outline-none focus:border-teal-700"><option value="max">MAX</option><option value="tg">Telegram</option><option value="wa">WhatsApp</option><option value="web">Веб-чат</option></select></div>
+        <div class="flex flex-col gap-1.5"><label for="c_status" class="text-[12.5px] font-medium text-neutral-600">Статус</label>
+          <select id="c_status" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 bg-white focus:outline-none focus:border-teal-700"><option value="confirmed">Подтверждена</option><option value="prepay">Предоплата</option><option value="ota">Новая</option></select></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5"><label for="c_guests" class="text-[12.5px] font-medium text-neutral-600">Гостей</label><input id="c_guests" type="number" min="1" value="2" class="bk-input mono rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" /></div>
+        <div class="flex flex-col gap-1.5"><label for="c_sum" class="text-[12.5px] font-medium text-neutral-600">Сумма, ₽</label><input id="c_sum" class="bk-input mono rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" placeholder="0" /></div>
+      </div>
+      <label class="flex items-start gap-2.5 text-[13px] text-neutral-700 cursor-pointer select-none">
+        <input id="c_gencode" type="checkbox" checked class="mt-0.5 accent-teal-700 w-4 h-4" />
+        <span>Сгенерировать гостевой код замка <span class="text-neutral-400">(временный, на даты брони)</span></span>
+      </label>
+      <p id="c_codehint" class="hidden text-[12px] text-amber-700 bg-amber-50 rounded-lg px-3.5 py-2.5 flex items-start gap-2"><i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0"></i><span></span></p>
+    </div>
+    <div class="px-6 py-4 border-t border-neutral-100 flex items-center justify-end gap-2.5 shrink-0">
+      <button onclick="closeCreate()" class="text-[13.5px] font-medium px-4 py-2.5 rounded-lg border border-neutral-200 hover:border-neutral-400 text-neutral-600">Отмена</button>
+      <button onclick="submitCreate()" class="inline-flex items-center gap-1.5 text-[13.5px] font-medium px-4 py-2.5 rounded-lg bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> Создать бронь</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Лид (просмотр) ── -->
+<div id="leadModal" class="hidden fixed inset-0 z-[67] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);" onclick="if(event.target===this)closeLead()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden">
+    <div id="ldHead" class="shrink-0 border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="ldBody" class="px-5 py-4"></div>
+    <div id="ldFoot" class="shrink-0 border-t border-neutral-200 px-5 py-3 flex items-center gap-2"></div>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Подтверждение отказа (защита от дурака) ── -->
+<div id="rejectModal" class="hidden fixed inset-0 z-[72] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);" onclick="if(event.target===this)closeReject()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+    <div class="px-6 pt-5 pb-4 flex items-start gap-3">
+      <span class="w-10 h-10 rounded-xl bg-red-50 grid place-items-center shrink-0"><i data-lucide="archive" class="w-5 h-5 text-red-500"></i></span>
+      <div>
+        <div class="text-[16px] font-semibold">Перенести лид в архив?</div>
+        <div class="text-[13px] text-neutral-500 mt-0.5">Лид «<span id="rejectName" class="font-medium text-neutral-700"></span>» уедет в отказы. Бронь по нему не родится. Вернуть можно из Списка → «Отказы».</div>
+      </div>
+    </div>
+    <div class="px-6 py-4 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+      <button onclick="closeReject()" class="text-[13.5px] font-medium px-4 py-2.5 rounded-lg border border-neutral-200 hover:border-neutral-400 text-neutral-600">Отмена</button>
+      <button onclick="doReject()" class="inline-flex items-center gap-1.5 text-[13.5px] font-medium px-4 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700"><i data-lucide="archive" class="w-4 h-4"></i> Перенести в архив</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── МОДАЛКА: Новый лид (ручное заведение звонка/заявки) ── -->
+<div id="leadCreateModal" class="hidden fixed inset-0 z-[70] items-center justify-center p-4" style="background:rgba(0,0,0,0.45);" onclick="if(event.target===this)closeCreateLead()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+    <div class="px-6 py-5 border-b border-neutral-100 flex items-center gap-3">
+      <span class="w-10 h-10 rounded-xl bg-slate-100 grid place-items-center"><i data-lucide="phone-incoming" class="w-5 h-5 text-slate-600"></i></span>
+      <div>
+        <div class="text-[17px] font-semibold">Новый лид</div>
+        <div class="text-[13px] text-neutral-500">Звонок или заявка до брони — занесите вручную</div>
+      </div>
+      <button onclick="closeCreateLead()" class="ml-auto w-9 h-9 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1.5"><label for="nl_phone" class="text-[12.5px] font-medium text-neutral-600">Телефон</label><input id="nl_phone" class="bk-input mono rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" placeholder="+7 …" /></div>
+        <div class="flex flex-col gap-1.5"><label for="nl_name" class="text-[12.5px] font-medium text-neutral-600">Имя <span class="text-neutral-400">(если есть)</span></label><input id="nl_name" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700" placeholder="Имя гостя" /></div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <label for="nl_src" class="text-[12.5px] font-medium text-neutral-600">Источник</label>
+        <select id="nl_src" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 bg-white focus:outline-none focus:border-teal-700">
+          <option value="manual">Вручную</option>
+          <option value="call">Звонок</option>
+          <option value="site">Сайт</option>
+          <option value="ota">Площадка (Авито / Суточно)</option>
+        </select>
+      </div>
+      <div class="flex flex-col gap-1.5"><label for="nl_note" class="text-[12.5px] font-medium text-neutral-600">Заметка</label><textarea id="nl_note" rows="2" class="bk-input rounded-lg border border-neutral-200 px-3 py-2.5 focus:outline-none focus:border-teal-700 resize-none" placeholder="Что спрашивал гость, что обещали…"></textarea></div>
+    </div>
+    <div class="px-6 py-4 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+      <button onclick="closeCreateLead()" class="text-[13.5px] font-medium px-4 py-2.5 rounded-lg border border-neutral-200 hover:border-neutral-400 text-neutral-600">Отмена</button>
+      <button onclick="submitLead()" class="inline-flex items-center gap-1.5 text-[13.5px] font-medium px-4 py-2.5 rounded-lg bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-4 h-4"></i> Добавить лид</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[90] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Календарь активен) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Календарь', active:true },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика' },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  // ══════════ ДАННЫЕ ══════════
+  const TODAY = new Date(2026, 5, 2);
+  const D = (y,m,d) => new Date(y, m, d);
+  const OBJECTS = [
+    { id:'tverskaya', name:'Тверская 15', space:'Центр',  lock:true,     addr:'Москва, ул. Тверская, 15, кв. 48' },
+    { id:'arbat',     name:'Арбат 8',     space:'Центр',  lock:true,     addr:'Москва, ул. Арбат, 8, кв. 12' },
+    { id:'lenina',    name:'Ленина 42',   space:'У метро',lock:true,     addr:'Москва, пр-т Ленина, 42, кв. 91' },
+    { id:'pobedy',    name:'Победы 7',    space:'У метро',lock:'keybox',  addr:'Москва, ул. Победы, 7, кв. 5' },
+    { id:'sadovaya',  name:'Садовая 3',   space:'Центр',  lock:true,     addr:'Москва, ул. Садовая, 3, кв. 120' },
+    { id:'dachnaya',  name:'Дачная 12',   space:'Загород',lock:true,     addr:'МО, пос. Лесной, ул. Дачная, 12' },
+  ];
+  // ── демо-масштаб: добавляем объекты в нескольких пространствах, чтобы видеть плотность и группировку как у крупного хоста (~30 объектов) ──
+  (function seedObjects(){
+    const streets = {
+      'Центр':       ['Никольская','Покровка','Маросейка','Солянка','Пятницкая','Остоженка'],
+      'У метро':     ['Профсоюзная','Вернадского','Беляево','Коньково','Тёплый Стан','Калужская','Ясенево'],
+      'Загород':     ['Сосновая','Берёзовая','Озёрная','Лесная','Дачный пер.'],
+      'Новостройки': ['Символ к.3','Зиларт к.7','Прайм к.2','Лайнер к.5','Сити к.9','Фили Град к.1','Остров к.4','Метрополия к.6'],
+    };
+    let n=1;
+    for (const [space, list] of Object.entries(streets)) {
+      list.forEach((st) => {
+        const lock = (n%7===0) ? 'keybox' : (n%13===0 ? false : true);
+        const nm = `${st} ${10+(n*3)%80}`;
+        OBJECTS.push({ id:'gen'+n, name:nm, space, lock, addr:`Москва, ул. ${nm}, кв. ${1+(n*7)%150}` });
+        n++;
+      });
+    }
+  })();
+  const objById = (id) => OBJECTS.find((o) => o.id === id);
+  // детерминированный цвет-плейсхолдер фото объекта (реальных фото в мокапе нет)
+  function objColor(o){ let h=0; for(const c of o.id) h=(h*31+c.charCodeAt(0))%360; return `hsl(${h} 45% 60%)`; }
+
+  let BOOKINGS = [
+    { id:'b1', obj:'tverskaya', guest:'Сергей Котов',  phone:'+7 916 200-11-22', ch:'tg',  status:'confirmed', ci:D(2026,5,1), co:D(2026,5,5), price:24000, code:'9500#', codeState:'loaded', guests:2, src:'Авито',     paid:'оплачено', note:'Постоянный гость, любит высокий этаж. Просил поздний выезд до 15:00.' },
+    { id:'b2', obj:'tverskaya', guest:'Мария Морозова', phone:'+7 903 555-19-04', ch:'tg', status:'prepay',    ci:D(2026,5,5), co:D(2026,5,9), price:18000, code:null,  codeState:'loading', guests:1, src:'Суточно', paid:'предоплата 30%', note:'Едет с маленькой собакой — предупредить уборку.' },
+    { id:'b3', obj:'tverskaya', guest:'Дмитрий Орлов',  phone:'+7 925 818-77-10', ch:'wa', status:'ota',       ci:D(2026,5,9), co:D(2026,5,12),price:21000, code:'8810#',codeState:'loaded', guests:3, src:'Островок', paid:'оплачено', note:'' },
+    { id:'b4', obj:'arbat',     guest:'Анна Лебедева',  phone:'+7 911 042-30-88', ch:'max',status:'confirmed', ci:D(2026,5,2), co:D(2026,5,6), price:18000, code:'3344#',codeState:'loaded', guests:2, src:'Авито',     paid:'оплачено', note:'Годовщина — положили бутылку вина от хоста.' },
+    { id:'b5', obj:'lenina',    guest:'Игорь Власов',   phone:'+7 962 130-44-09', ch:'web',status:'ota',       ci:D(2026,5,3), co:D(2026,5,7), price:20800, code:null,  codeState:'loading', guests:2, src:'Циан',    paid:'ожидает оплату', note:'Просил счёт на юрлицо (ООО «Вектор»).' },
+    { id:'b6', obj:'lenina',    guest:'Павел Сорокин',  phone:'+7 905 770-12-55', ch:'tg', status:'prepay',    ci:D(2026,5,8), co:D(2026,5,11),price:16500, code:null,  codeState:'loading', guests:1, src:'Суточно', paid:'предоплата 30%' },
+    { id:'b7', obj:'pobedy',    guest:'Ольга Зайцева',  phone:'+7 977 318-26-71', ch:'max',status:'confirmed', ci:D(2026,5,2), co:D(2026,5,4), price:7600,  code:'1122#',codeState:'loaded', guests:1, src:'Авито',     paid:'оплачено' },
+    { id:'b8', obj:'sadovaya',  guest:'Семья Беловых',  phone:'+7 916 901-55-30', ch:'max',status:'confirmed', ci:D(2026,5,2), co:D(2026,5,6), price:32000, code:'7788#',codeState:'loaded', guests:5, src:'Прямая',   paid:'оплачено', groupId:'g1', note:'Большая семья на 2 квартиры. Доп. комплект полотенец.' },
+    { id:'b10',obj:'dachnaya',  guest:'Семья Беловых',  phone:'+7 916 901-55-30', ch:'max',status:'confirmed', ci:D(2026,5,2), co:D(2026,5,6), price:48000, code:'5566#',codeState:'loaded', guests:5, src:'Прямая',   paid:'оплачено', groupId:'g1' },
+    { id:'b11',obj:'arbat',     guest:'Ольга783',       phone:'+7 900 111-22-33', ch:'max',status:'confirmed', ci:D(2026,4,25),co:D(2026,4,29),price:13500, code:null,  codeState:'none',   guests:1, src:'Авито',     paid:'оплачено' },
+    { id:'b12',obj:'sadovaya',  guest:'Тимур Гасанов',  phone:'+7 999 404-88-12', ch:'web',status:'ota',       ci:D(2026,5,7), co:D(2026,5,10),price:22000, code:null,  codeState:'loading', guests:2, src:'Островок', paid:'ожидает оплату' },
+    { id:'b13',obj:'dachnaya',  guest:'Корпоратив «Атлас»',phone:'+7 495 200-30-40',ch:'web',status:'cancelled',ci:D(2026,5,10),co:D(2026,5,13),price:0,     code:null,  codeState:'none',   guests:8, src:'Прямая',   paid:'возврат' },
+  ];
+  // ── демо-брони для сгенерированных объектов (1–2 на объект, в окне июня) ──
+  (function seedBookings(){
+    const names = ['Алексей М.','Ирина К.','Олег Д.','Наталья П.','Виктор С.','Дарья Ф.','Роман Г.','Юлия Б.','Павел Л.','Светлана Р.','Денис К.','Марина М.'];
+    const chans = ['max','tg','wa','web'], stats=['confirmed','prepay','ota'], css=['loaded','loading','none'], srcs=['Авито','Суточно','Островок','Циан','Прямая'];
+    let id=200;
+    const mkB=(o,gi,statusI,csI,startDay,len)=>{
+      const lock=o.lock, cs=lock?css[csI]:'none', status=stats[statusI];
+      return { id:'b'+(id++), obj:o.id, guest:names[gi%names.length], phone:'+7 9'+(10+id%89)+' '+String(100+id%900)+'-00-00',
+        ch:chans[gi%4], status, ci:D(2026,5,startDay), co:D(2026,5,startDay+len),
+        price:(10+id%9)*2000, code:(lock&&cs==='loaded')?String(1000+id%8000)+'#':null, codeState:cs,
+        guests:1+(id%4), src:srcs[id%5], paid:status==='ota'?'ожидает оплату':'оплачено' };
+    };
+    OBJECTS.filter(o=>o.id.startsWith('gen')).forEach((o,i)=>{
+      const a=(i*4)%16;                 // старт 1–16 июня
+      BOOKINGS.push(mkB(o,i,i%3,i%3,1+a,3+(i%4)));
+      if(i%2===0){ const b=1+a+3+(i%4)+1; BOOKINGS.push(mkB(o,i+5,(i+1)%3,(i+1)%3,b,2+(i%3))); }
+    });
+  })();
+  const GROUPS = { g1:{ guest:'Семья Беловых', note:'Семья на 2 объекта — одно приветствие, один диалог.' } };
+  const groupMembers = (gid) => BOOKINGS.filter((b) => b.groupId === gid);
+
+  // ══════════ ЛИДЫ (левая половина цикла: входящий контакт до брони) ══════════
+  // status: 'open' (на доске) | 'rejected' (отказ → архив) | 'converted' (стал бронью → архив)
+  // stage:  'new' | 'work'  (этап в лид-зоне доски)
+  let LEADS = [
+    { id:'l1', name:'Андрей Петров',  phone:'+7 912 044-55-10', src:'call', stage:'new',  status:'open', note:'Спрашивал Тверскую на выходные 6–8 июня, 2 гостя, нужен ранний заезд.', rec:'4:12', at:'10:24' },
+    { id:'l2', name:'+7 922 700-18-33', phone:'+7 922 700-18-33', src:'call', stage:'new',  status:'open', note:'Пропущенный звонок. Перезвонить.', rec:null,   at:'09:50' },
+    { id:'l3', name:'Елена',          phone:'+7 905 612-90-00', src:'site', stage:'work', status:'open', note:'Заявка с сайта: Арбат, 3 ночи в июле, бюджет до 7000/ночь.', rec:null, at:'вчера' },
+    { id:'l4', name:'Гость с Авито',  phone:'—',                src:'ota',  stage:'work', status:'open', note:'Пишет в чате Авито до брони — уточняет, можно ли с животным.', rec:null, at:'вчера' },
+  ];
+  let leadSeq = 100;
+  const LEAD_SRC = {
+    call:  { label:'Звонок',   ic:'phone-incoming', cls:'bg-teal-50 text-teal-700' },
+    site:  { label:'Сайт',     ic:'globe',          cls:'bg-neutral-100 text-neutral-600' },
+    ota:   { label:'Площадка', ic:'message-square', cls:'bg-neutral-100 text-neutral-600' },
+    manual:{ label:'Вручную',  ic:'pencil',         cls:'bg-neutral-100 text-neutral-600' },
+  };
+  const LEAD_STAGES = [
+    { key:'new',  label:'Новый лид', ic:'sparkles',    tone:'sky' },
+    { key:'work', label:'В работе',  ic:'phone-call',  tone:'violet' },
+  ];
+  const leadById = (id) => LEADS.find((l) => l.id === id);
+  const openLeads = () => LEADS.filter((l) => l.status === 'open');
+
+  const ST = {
+    confirmed:{ label:'Подтверждена', seg:'bg-emerald-100 border-emerald-300 text-emerald-900', chip:'bg-emerald-50 text-emerald-700', dotCls:'bg-emerald-500' },
+    prepay:   { label:'Предоплата',   seg:'bg-amber-100 border-amber-300 text-amber-900',       chip:'bg-amber-50 text-amber-700',     dotCls:'bg-amber-500' },
+    ota:      { label:'Новая · OTA',  seg:'bg-neutral-100 border-neutral-300 text-neutral-900',             chip:'bg-neutral-50 text-neutral-700',         dotCls:'bg-neutral-500' },
+    cancelled:{ label:'Отменена',     seg:'bg-neutral-100 border-neutral-300 text-neutral-500', chip:'bg-neutral-100 text-neutral-500',dotCls:'bg-neutral-400' },
+  };
+  // Канал — категория, не severity: единый нейтральный фон, различаем буквой
+  const CH = {
+    max:{ label:'MAX', cls:'bg-neutral-100 text-neutral-600' },
+    tg: { label:'TG',  cls:'bg-neutral-100 text-neutral-600' },
+    wa: { label:'WA',  cls:'bg-neutral-100 text-neutral-600' },
+    web:{ label:'Веб', cls:'bg-neutral-100 text-neutral-600' },
+  };
+  const codeDot = { loaded:'bg-emerald-500', loading:'bg-amber-500', none:'bg-red-500' };
+  const codePillCls = { loaded:'text-emerald-800 bg-emerald-50/80 border border-emerald-300', loading:'text-amber-800 bg-amber-50/80 border border-amber-300', none:'text-red-700 bg-red-50/80 border border-red-300' };
+  const MON = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const MON_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const WD = ['вс','пн','вт','ср','чт','пт','сб'];
+
+  const DAY = 86400000;
+  const addDays = (d,n) => new Date(d.getFullYear(), d.getMonth(), d.getDate()+n);
+  const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = (a,b) => Math.round((stripTime(a) - stripTime(b)) / DAY);
+  const fmtD = (d) => `${d.getDate()} ${MON[d.getMonth()]}`;
+  const fmtRange = (a,b) => `${a.getDate()}–${fmtD(b)}`;
+  const fmtISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const parseISO = (s) => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+  const nights = (b) => Math.round((stripTime(b.co)-stripTime(b.ci))/DAY);
+  const fmt = (n) => Number(n).toLocaleString('ru-RU');
+  const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const isWeekend = (d) => { const w=d.getDay(); return w===0||w===6; };
+
+  // ══════════ СОСТОЯНИЕ ══════════
+  let view = 'board';
+  let boardMode = 'classic';
+  let zoom = 14;
+  let winOffset = -1;
+  let listStatus = 'all';
+  let fullscreen = false;
+  let density = 'comfort';            // 'comfort' (фото, 46px) | 'compact' (без фото, 28px) — для 50–150 объектов
+  let collapsedSpaces = new Set();    // свёрнутые группы-пространства
+  const windowStart = () => addDays(TODAY, winOffset);
+
+  function passFilters(b) {
+    const q = (document.getElementById('bkSearch').value||'').trim().toLowerCase();
+    if (q) { const hay = (b.guest+' '+objById(b.obj).name+' '+(b.code||'')).toLowerCase(); if (!hay.includes(q)) return false; }
+    const sp = document.getElementById('fltSpace').value;
+    if (sp && sp!=='all' && objById(b.obj).space!==sp) return false;
+    const st = document.getElementById('fltStatus').value;
+    if (st && st!=='all' && b.status!==st) return false;
+    return true;
+  }
+
+  // ══════════ ШАХМАТКА (КЛАССИКА) ══════════
+  function renderScoreboard() {
+    const start = windowStart();
+    const dates = Array.from({length:zoom}, (_,i)=> addDays(start,i));
+    const todayIdx = dayDiff(TODAY, start);
+    document.getElementById('period').textContent = `${start.getDate()} ${MON[start.getMonth()]} – ${fmtD(dates[zoom-1])}`;
+    const colTpl = `grid-template-columns:repeat(${zoom},minmax(0,1fr))`;
+    const mobile = window.matchMedia('(max-width:768px)').matches;
+    const nameW = 188; // CSS опускает до 132 на mobile
+    // fullscreen на десктопе — тянем на всю ширину (minWidth 0); на mobile (landscape) и обычном виде — даём min-width, чтобы даты скроллились пальцем
+    const minCell = (fullscreen && !mobile) ? 0 : (fullscreen ? 66 : 54);
+    document.getElementById('sbInner').style.minWidth = (fullscreen && !mobile) ? '0' : (nameW + zoom*minCell) + 'px';
+
+    // строка месяцев
+    let monthRow = '<div class="flex items-stretch" style="height:22px">';
+    monthRow += `<div class="sb-namecol shrink-0 sticky left-0 z-20 bg-white border-r border-neutral-200"></div>`;
+    monthRow += `<div class="cal-header flex-1 grid" style="${colTpl}" onmousedown="headerDown(event)">`;
+    let i=0;
+    while (i<zoom) {
+      let j=i; while (j+1<zoom && dates[j+1].getMonth()===dates[i].getMonth()) j++;
+      const span=(j-i+1);
+      monthRow += `<div class="flex items-center text-[11px] font-semibold text-neutral-500 pl-2 border-l border-neutral-100" style="grid-column:span ${span}">${MON_FULL[dates[i].getMonth()]}</div>`;
+      i=j+1;
+    }
+    monthRow += '</div></div>';
+
+    // строка дней (выходные + сегодня — как на Главной B5)
+    let dayRow = '<div class="flex border-b border-neutral-200" style="height:36px">';
+    dayRow += `<div class="sb-namecol shrink-0 sticky left-0 z-20 bg-white border-r border-neutral-200 flex items-center px-3 text-[11px] font-medium text-neutral-400">Объект</div>`;
+    dayRow += `<div class="cal-header flex-1 grid" style="${colTpl}" onmousedown="headerDown(event)">`;
+    dates.forEach((d,idx)=>{
+      const today = idx===todayIdx, we = isWeekend(d);
+      dayRow += `<div class="flex flex-col items-center justify-center border-l border-neutral-100 ${today?'bg-bordo/5':(we?'bg-neutral-100':'')}">
+        <span class="text-[12px] mono leading-none ${today?'text-bordo font-bold':'text-neutral-700'}">${d.getDate()}</span>
+        <span class="text-[9px] uppercase tracking-wide mt-0.5 ${today?'text-bordo font-semibold':'text-neutral-400'}">${today?'сег':WD[d.getDay()]}</span>
+      </div>`;
+    });
+    dayRow += '</div></div>';
+
+    // строки объектов, сгруппированные по «Пространствам» (со сворачиванием)
+    const list = BOOKINGS.filter(passFilters);
+    const comfort = density==='comfort';
+    const rowH = comfort ? 46 : 28;
+    const fltSp = document.getElementById('fltSpace').value;
+    // порядок пространств — по первому появлению в OBJECTS
+    const spaceOrder = [];
+    OBJECTS.forEach(o=>{ if(!spaceOrder.includes(o.space)) spaceOrder.push(o.space); });
+
+    // ячейки-фон + сегменты броней одной строки-объекта
+    function rowTrack(o){
+      const objBookings = list.filter((b)=> b.obj===o.id);
+      let cells='';
+      dates.forEach((d,idx)=>{
+        const today=idx===todayIdx, we=isWeekend(d);
+        cells += `<div class="cell-bg group border-l border-neutral-100 ${today?'bg-bordo/5':(we?'bg-neutral-50':'')}" data-obj="${o.id}" data-idx="${idx}" onmousedown="cellDown(event,'${o.id}',${idx})" title="Добавить бронь · ${d.getDate()} ${MON[d.getMonth()]}">
+          <span class="opacity-0 group-hover:opacity-100 absolute inset-0 grid place-items-center text-teal-400 pointer-events-none"><i data-lucide="plus" class="w-4 h-4"></i></span>
+        </div>`;
+      });
+      let segs='';
+      objBookings.forEach((b)=>{
+        const si = dayDiff(b.ci, start), ei = dayDiff(b.co, start);
+        if (ei<=0 || si>=zoom) return;
+        let left=(si+0.5)/zoom*100, right=(ei+0.5)/zoom*100;
+        const clipL=left<0, clipR=right>100;
+        left=Math.max(0,left); right=Math.min(100,right);
+        const w=right-left;
+        const lockless=!o.lock;
+        const dot = lockless ? '' : `<span class="w-2 h-2 rounded-full ${codeDot[b.codeState]} shrink-0 ring-1 ring-white/70" title="статус кода"></span>`;
+        const codeHtml = (lockless||!b.codeState) ? '' :
+          `<span class="mono text-[10px] font-bold px-1 rounded ml-auto shrink-0 ${codePillCls[b.codeState]}">${b.code?esc(b.code):'•••'}</span>`;
+        const grp = b.groupId ? `<i data-lucide="users" class="w-3 h-3 text-teal-600 shrink-0"></i>` : '';
+        const noteIc = b.note ? `<i data-lucide="sticky-note" class="w-3 h-3 text-amber-500 shrink-0" title="${esc(b.note)}"></i>` : '';
+        const rounded = `${clipL?'border-top-left-radius:0;border-bottom-left-radius:0;':''}${clipR?'border-top-right-radius:0;border-bottom-right-radius:0;':''}`;
+        segs += `<div class="seg ${ST[b.status].seg} ${b.status==='cancelled'?'is-cancelled':''}" data-id="${b.id}" ${b.groupId?`data-group="${b.groupId}"`:''}
+            style="left:${left}%;width:${w}%;${rounded}"
+            onmousedown="segDown(event,'${b.id}')"
+            ${b.groupId?`onmouseenter="grpHi('${b.groupId}',1)" onmouseleave="grpHi('${b.groupId}',0)"`:''}>
+          ${dot}${grp}${noteIc}
+          <span class="seg-guest font-medium truncate">${esc(b.guest)}</span>
+          ${codeHtml}
+          <span class="mono opacity-60 ml-auto pl-1 shrink-0">${b.price?fmt(b.price)+' ₽':''}</span>
+        </div>`;
+      });
+      return `<div class="absolute inset-0 grid" style="${colTpl}">${cells}</div>${segs}`;
+    }
+
+    // левая ячейка-имя: фото-плейсхолдер в Комфорте, иконка-тип в Компакте
+    function rowName(o){
+      const ic = o.lock===false?'lock-open':(o.lock==='keybox'?'key-round':'building-2');
+      if (comfort) return `<span class="w-9 h-9 rounded-md shrink-0 grid place-items-center text-white/90" style="background:${objColor(o)}"><i data-lucide="${ic}" class="w-4 h-4"></i></span>
+        <span class="min-w-0 leading-tight">
+          <span class="block text-[11.5px] font-medium truncate">${esc(o.name)}</span>
+          <span class="block text-[10.5px] text-neutral-400 truncate">${esc(o.addr||o.space)}</span>
+        </span>`;
+      return `<i data-lucide="${ic}" class="w-3.5 h-3.5 text-neutral-400 shrink-0"></i>
+        <span class="text-[12px] font-medium truncate">${esc(o.name)}</span>`;
+    }
+
+    let body='';
+    spaceOrder.forEach((space)=>{
+      if (fltSp && fltSp!=='all' && fltSp!==space) return;
+      const objs = OBJECTS.filter(o=>o.space===space);
+      if (!objs.length) return;
+      const collapsed = collapsedSpaces.has(space);
+      // заголовок группы — sticky слева, сворачивает блок
+      body += `<div class="sb-group flex items-stretch border-b border-neutral-200" style="height:30px">
+        <button onclick="toggleSpace('${esc(space)}')" class="sb-namecol shrink-0 sticky left-0 z-[16] bg-neutral-100/90 border-r border-neutral-200 flex items-center gap-1.5 px-3 text-left hover:text-teal-700">
+          <i data-lucide="chevron-${collapsed?'right':'down'}" class="w-4 h-4 text-neutral-400 shrink-0"></i>
+          <span class="text-[12px] font-semibold text-neutral-700 truncate">${esc(space)}</span>
+          <span class="mono text-[11px] text-neutral-400 ml-1 shrink-0">${objs.length}</span>
+        </button>
+        <div class="flex-1 bg-neutral-100/60 flex items-center px-3 text-[11px] text-neutral-400">${collapsed?`${objs.length} объектов скрыто`:''}</div>
+      </div>`;
+      if (collapsed) return;
+      objs.forEach((o)=>{
+        body += `<div class="flex border-b border-neutral-100" style="height:${rowH}px">
+          <button onclick="filterObj('${o.id}')" class="sb-namecol shrink-0 sticky left-0 z-[15] bg-white border-r border-neutral-200 flex items-center gap-1.5 px-3 text-left hover:text-teal-700" style="box-shadow:4px 0 6px -4px rgba(0,0,0,0.10)">
+            ${rowName(o)}
+          </button>
+          <div class="sb-track" data-objrow="${o.id}">${rowTrack(o)}</div>
+        </div>`;
+      });
+    });
+
+    // прим.: при 150+ объектах в проде строки виртуализируются (рисуем только видимые)
+    const inner=document.getElementById('sbInner');
+    inner.classList.remove('dens-comfort','dens-compact'); inner.classList.add('dens-'+density);
+    inner.innerHTML = monthRow + dayRow + body;
+    lucide.createIcons();
+  }
+  function grpHi(gid,on){ document.querySelectorAll(`[data-group="${gid}"]`).forEach((el)=> el.classList.toggle('grp-hi', !!on)); }
+  // #26: клик по адресу объекта в шахматке → быстрый просмотр объекта
+  function objCurrentNext(oid){
+    const bs = BOOKINGS.filter(b=>b.obj===oid && b.status!=='cancelled').sort((a,b)=>a.ci-b.ci);
+    const cur = bs.find(b=> stripTime(b.ci)<=stripTime(TODAY) && stripTime(TODAY)<stripTime(b.co));
+    const next = bs.find(b=> stripTime(b.ci)>stripTime(TODAY));
+    return { cur, next };
+  }
+  function openObjModal(id){
+    const o = objById(id); if(!o) return;
+    const lockBadge = o.lock===false
+      ? '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-500"><i data-lucide="lock-open" class="w-3.5 h-3.5"></i> Без замка</span>'
+      : o.lock==='keybox'
+        ? '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-amber-50 text-amber-700"><i data-lucide="key-round" class="w-3.5 h-3.5"></i> Кейбокс</span>'
+        : '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-700"><i data-lucide="lock" class="w-3.5 h-3.5"></i> Умный замок</span>';
+    document.getElementById('omHead').innerHTML = `
+      <div class="flex items-center gap-2.5">
+        <span class="w-9 h-9 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-[18px] h-[18px] text-neutral-500"></i></span>
+        <div class="min-w-0 flex-1"><div class="text-[15px] font-semibold truncate">${esc(o.name)}</div><div class="text-[12px] text-neutral-400">${esc(o.space)}</div></div>
+        ${lockBadge}
+      </div>`;
+    const { cur, next } = objCurrentNext(id);
+    const bkLine = (b, label, tone) => `
+      <div class="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2">
+        <span class="w-2 h-2 rounded-full ${ST[b.status].dotCls} shrink-0"></span>
+        <div class="min-w-0 flex-1"><div class="text-[12.5px] font-medium truncate">${esc(b.guest)}</div><div class="text-[11px] text-neutral-400">${fmtRange(b.ci,b.co)} · ${fmt(b.price)} ₽</div></div>
+        <span class="text-[10.5px] font-medium px-1.5 py-0.5 rounded ${tone} shrink-0">${label}</span>
+      </div>`;
+    let body = '';
+    if(cur) body += bkLine(cur, 'сейчас здесь', 'bg-emerald-50 text-emerald-700');
+    if(next) body += bkLine(next, 'следующая', 'bg-neutral-100 text-neutral-600');
+    if(!cur && !next) body = '<div class="text-[12.5px] text-neutral-400 text-center py-3">Нет активных и будущих броней</div>';
+    document.getElementById('omBody').innerHTML = body;
+    const m=document.getElementById('objModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeObjModal(){ const m=document.getElementById('objModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function filterObj(id){ openObjModal(id); }
+
+  function shiftWindow(n){ winOffset += n; renderScoreboard(); }
+  function goToday(){ winOffset = -1; renderScoreboard(); }
+  function setZoom(z){ zoom=z; syncZoom(); renderScoreboard(); }
+  function syncZoom(){ [7,14,30].forEach((z)=>{ document.getElementById('z'+z).className = `text-[12px] font-medium px-2.5 py-1 rounded-md ${z===zoom?'bg-teal-700 text-white':'text-neutral-600'}`; }); }
+  function setDensity(d){ density=d; syncDensity(); renderScoreboard(); }
+  function syncDensity(){ document.getElementById('densComfort').classList.toggle('on', density==='comfort'); document.getElementById('densCompact').classList.toggle('on', density==='compact'); }
+  function toggleSpace(sp){ if(collapsedSpaces.has(sp)) collapsedSpaces.delete(sp); else collapsedSpaces.add(sp); renderScoreboard(); }
+
+  // ── взаимодействие: pan (шапка), select (ячейки), move (сегмент) ──
+  let dragMode=null;            // null|'pan'|'select'|'maybemove'|'movebk'
+  let panStartX=0, panBase=0, panLast=0;
+  let selObj=null, selTrack=null, selStart=0, selCur=0;
+  let moveId=null, moveStartX=0, moveStartY=0, moveEl=null, moveSrcTrack=null;
+
+  function cellW(track){ return track.getBoundingClientRect().width / zoom; }
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  // занят ли день idx бронью этого объекта (чтобы не создавать новую поверх брони — фикс «задвоения»)
+  function dayOccupied(objId, start, idx){
+    return BOOKINGS.some((b)=>{ if(b.obj!==objId || b.status==='cancelled') return false;
+      const si=dayDiff(b.ci,start), ei=dayDiff(b.co,start); return idx>=si && idx<ei; });
+  }
+
+  function headerDown(e){ if(e.button!==0)return; dragMode='pan'; panStartX=e.clientX; panBase=winOffset; panLast=0; e.preventDefault(); }
+
+  // выделение пустых ячеек мышью = новая бронь с диапазоном дат; клик = 1 ночь. Листание — жестом/колесом (не конфликтует)
+  function cellDown(e,objId,idx){
+    if(e.button!==0) return;
+    if(dayOccupied(objId, windowStart(), idx)) return;   // занятый день — там перенос брони
+    dragMode='select'; selObj=objId; selStart=selCur=idx;
+    selTrack=e.currentTarget.closest('.sb-track');
+    drawSel(); e.preventDefault();
+  }
+  function drawSel(){
+    clearSel();
+    const cw=cellW(selTrack), a=Math.min(selStart,selCur), b=Math.max(selStart,selCur);
+    const box=document.createElement('div'); box.className='sel-box';
+    box.style.left=(a*cw)+'px'; box.style.width=((b-a+1)*cw)+'px';
+    selTrack.appendChild(box); selTrack._sel=box;
+  }
+  function clearSel(){ if(selTrack&&selTrack._sel){ selTrack._sel.remove(); selTrack._sel=null; } }
+
+  function segDown(e,id){
+    if(e.button!==0) return; e.stopPropagation();
+    dragMode='maybemove'; moveId=id; moveStartX=e.clientX; moveStartY=e.clientY;
+    moveEl=e.currentTarget; moveSrcTrack=moveEl.closest('.sb-track');
+    e.preventDefault();
+  }
+  function clearRowDrops(){ document.querySelectorAll('.sb-track.row-drop').forEach((t)=>t.classList.remove('row-drop')); }
+
+  document.addEventListener('mousemove',(e)=>{
+    if(dragMode==='pan'){
+      const t=document.querySelector('.sb-track'); if(!t)return;
+      const cw=t.getBoundingClientRect().width/zoom;
+      const shift=Math.round(-(e.clientX-panStartX)/cw);
+      if(shift!==panLast){ panLast=shift; winOffset=panBase+shift; renderScoreboard(); }
+    } else if(dragMode==='select'){
+      const cw=cellW(selTrack);
+      const r=selTrack.getBoundingClientRect();
+      selCur=clamp(Math.floor((e.clientX-r.left)/cw),0,zoom-1); drawSel();
+    } else if(dragMode==='maybemove'){
+      if(Math.abs(e.clientX-moveStartX)>5 || Math.abs(e.clientY-moveStartY)>5){
+        dragMode='movebk'; moveEl.classList.add('dragging');
+        document.getElementById('sbInner').classList.add('sb-moving');   // прячем hover-«+», чтобы не путать с созданием
+      }
+    } else if(dragMode==='movebk'){
+      moveEl.style.pointerEvents='none';
+      const under=document.elementFromPoint(e.clientX,e.clientY);
+      const track=under && under.closest('.sb-track');
+      clearRowDrops(); if(track) track.classList.add('row-drop');
+    }
+  });
+  document.addEventListener('mouseup',(e)=>{
+    if(dragMode==='select'){
+      const a=Math.min(selStart,selCur), b=Math.max(selStart,selCur);
+      const start=windowStart(); clearSel();
+      openCreate(selObj, addDays(start,a), addDays(start,b+1));
+    } else if(dragMode==='maybemove'){
+      openBooking(moveId);                         // не двигали → это клик
+    } else if(dragMode==='movebk'){
+      moveEl.style.pointerEvents='';
+      const under=document.elementFromPoint(e.clientX,e.clientY);
+      const track=under && under.closest('.sb-track');
+      const b=BOOKINGS.find((x)=>x.id===moveId);
+      if(track && b){
+        const newObj=track.getAttribute('data-objrow');
+        const cw=track.getBoundingClientRect().width/zoom;
+        const deltaCells=Math.round((e.clientX-moveStartX)/cw);
+        moveBooking(b, newObj, deltaCells);
+      }
+      clearRowDrops(); moveEl.classList.remove('dragging');
+      document.getElementById('sbInner').classList.remove('sb-moving');
+    }
+    dragMode=null; selTrack=null; moveEl=null;
+  });
+
+  // перенос брони: смена объекта (вертикаль) + сдвиг дат (горизонталь); код тот же
+  function moveBooking(b, newObjId, deltaCells){
+    const oldObj=objById(b.obj), newObj=objById(newObjId);
+    const objChanged = newObjId!==b.obj;
+    if(deltaCells){ b.ci=addDays(b.ci,deltaCells); b.co=addDays(b.co,deltaCells); }
+    if(objChanged){
+      const keptCode=b.code;
+      b.obj=newObjId;
+      if(!newObj.lock){
+        if(keptCode){ toast(`Бронь → «${newObj.name}». Код ${keptCode} снят из «${oldObj.name}» — у нового объекта нет замка, передайте ключи вручную`); }
+        else { toast(`Бронь перенесена в «${newObj.name}»`); }
+        b.code=null; b.codeState='none';
+      } else if(keptCode && (oldObj.lock)){
+        // тот же код: удаляем из старого замка, грузим в новый
+        b.codeState='loading';
+        toast(`Бронь → «${newObj.name}». Код ${keptCode} удалён из замка «${oldObj.name}» и загружается в «${newObj.name}»`);
+        rerender();
+        setTimeout(()=>{ b.codeState='loaded'; rerender(); }, 1300);
+        return;
+      } else {
+        toast(`Бронь перенесена в «${newObj.name}»`);
+      }
+    } else if(deltaCells){
+      toast(`Бронь «${b.guest}» сдвинута: ${fmtRange(b.ci,b.co)}`);
+    }
+    rerender();
+  }
+
+  // развернуть на весь экран
+  function toggleFullscreen(){
+    fullscreen=!fullscreen;
+    const p=document.getElementById('classicPanel');
+    const btn=document.getElementById('btnMax');
+    const mobile = window.matchMedia('(max-width:768px)').matches;
+    const bd = document.getElementById('sbBackdrop');
+    if(fullscreen){
+      bd.classList.remove('hidden');
+      // inline-стили (надёжнее arbitrary-классов Tailwind Play, которые JIT не генерит динамически)
+      if(mobile){
+        // поворот в landscape — вертикально на телефоне слишком мелко (п.4)
+        Object.assign(p.style,{ position:'fixed', top:'0', left:'0', width:'100vh', height:'100vw',
+          transformOrigin:'top left', transform:'rotate(90deg) translateY(-100%)',
+          zIndex:'85', borderRadius:'0', overflow:'auto', background:'#fff', padding:'4px' });
+      } else {
+        // модалка: центрированная карточка со скруглением, скролл внутри (как на Сводке, #25)
+        Object.assign(p.style,{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+          width:'min(1400px,94vw)', maxHeight:'92vh', zIndex:'80', borderRadius:'16px',
+          overflow:'auto', background:'#fff', padding:'8px', boxShadow:'0 20px 50px rgba(0,0,0,0.25)' });
+      }
+      btn.innerHTML='<i data-lucide="x" class="w-4 h-4"></i>';
+      btn.title='Закрыть';
+    } else {
+      bd.classList.add('hidden');
+      ['position','inset','top','left','width','height','maxHeight','transform','transformOrigin','zIndex','borderRadius','overflow','background','padding','boxShadow'].forEach((k)=>p.style[k]='');
+      btn.innerHTML='<i data-lucide="maximize-2" class="w-4 h-4"></i>';
+      btn.title='Развернуть на весь экран';
+    }
+    renderScoreboard(); lucide.createIcons();
+  }
+
+  // ══════════ ДОСКА (KANBAN) + DnD ══════════
+  const STAGES = [
+    { key:'new',      label:'Новые',        ic:'calendar-plus', tone:'blue' },
+    { key:'soon_in',  label:'Заезд скоро',  ic:'log-in',        tone:'teal' },
+    { key:'staying',  label:'Проживают',    ic:'house',         tone:'emerald' },
+    { key:'soon_out', label:'Выезд скоро',  ic:'log-out',       tone:'amber' },
+    { key:'done',     label:'Завершены',    ic:'check-check',   tone:'rose' },
+  ];
+  function stageOf(b){
+    if(b.stageOverride) return b.stageOverride;        // хост перетащил вручную
+    const dci=dayDiff(b.ci,TODAY), dco=dayDiff(b.co,TODAY);
+    if(dco<=0) return 'done';
+    if(dci>0) return dci<=2 ? 'soon_in' : 'new';
+    return dco<=2 ? 'soon_out' : 'staying';
+  }
+  function renderKanban(){
+    const list = BOOKINGS.filter(passFilters).filter((b)=> b.status!=='cancelled');
+    const wrap=document.getElementById('kanbanCols');
+    // единая воронка: лид-этапы + бронь-этапы одним рядом, общий стиль; + узкая колонка-кнопка «+ Этап»
+    wrap.style.gridTemplateColumns = `repeat(${LEAD_STAGES.length+STAGES.length},minmax(212px,1fr)) 52px`;
+    // 1) лид-этапы (начало воронки) ──
+    const leadCols = LEAD_STAGES.map((s)=>{
+      const items = openLeads().filter((l)=> l.stage===s.key);
+      const cards = items.map(leadCard).join('') || `<div class="text-[12px] text-neutral-400 px-1 py-6 text-center kb-empty">${s.key==='new'?'Новые лиды появятся здесь':'Пусто'}</div>`;
+      return `<div class="kb-col group bg-neutral-50 rounded-xl border border-neutral-200 flex flex-col min-h-[140px]" data-leadstage="${s.key}">
+        <div class="flex items-center gap-1.5 px-3 py-2.5 border-b border-neutral-200">
+          <i data-lucide="${s.ic}" class="w-4 h-4 text-${s.tone}-600 shrink-0"></i>
+          <span class="stage-label text-[12.5px] font-semibold truncate">${s.label}</span>
+          <button onclick="editLeadStage('${s.key}')" title="Переименовать этап" class="stage-edit opacity-0 group-hover:opacity-100 transition text-neutral-400 hover:text-teal-700 shrink-0"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+          <span class="ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-white border border-neutral-200 text-neutral-500 shrink-0">${items.length}</span>
+        </div>
+        <div class="p-2 space-y-2 flex-1">${cards}</div>
+      </div>`;
+    }).join('');
+    // 2) бронь-этапы (продолжение той же воронки) ──
+    const bookingCols = STAGES.map((s)=>{
+      const items=list.filter((b)=> stageOf(b)===s.key).sort((a,b)=> a.ci-b.ci);
+      const cards = items.map(kanbanCard).join('') || `<div class="text-[12px] text-neutral-400 px-1 py-6 text-center kb-empty">${s.key==='new'?'Перетащите лид сюда → станет бронью':'Перетащите сюда бронь'}</div>`;
+      return `<div class="kb-col group bg-neutral-50 rounded-xl border border-neutral-200 flex flex-col min-h-[140px]" data-stage="${s.key}">
+        <div class="flex items-center gap-1.5 px-3 py-2.5 border-b border-neutral-200">
+          <i data-lucide="${s.ic}" class="w-4 h-4 text-${s.tone}-600 shrink-0"></i>
+          <span class="stage-label text-[12.5px] font-semibold truncate">${s.label}</span>
+          <button onclick="editStage('${s.key}')" title="Переименовать этап" class="stage-edit opacity-0 group-hover:opacity-100 transition text-neutral-400 hover:text-teal-700 shrink-0"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+          ${s.custom ? `<button onclick="removeStage('${s.key}')" title="Удалить этап" class="opacity-0 group-hover:opacity-100 transition text-neutral-400 hover:text-red-600 shrink-0"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>` : ''}
+          <span class="ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-white border border-neutral-200 text-neutral-500 shrink-0">${items.length}</span>
+        </div>
+        <div class="p-2 space-y-2 flex-1">${cards}</div>
+      </div>`;
+    }).join('');
+    const addBtn = `<button onclick="addStage()" title="Добавить этап" class="kb-addcol self-start mt-0 h-10 w-[52px] grid place-items-center rounded-xl border border-dashed border-neutral-300 text-neutral-400 hover:border-teal-700 hover:text-teal-700 transition"><i data-lucide="plus" class="w-4 h-4"></i></button>`;
+    wrap.innerHTML = leadCols + bookingCols + addBtn;
+    lucide.createIcons();
+  }
+  // ── Карточка лида (источник, телефон, запись, заметка, действия) ──
+  function leadCard(l){
+    const sr = LEAD_SRC[l.src] || LEAD_SRC.manual;
+    const showName = l.name && l.name !== l.phone;
+    const rec = l.rec ? `<span class="inline-flex items-center gap-1 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600"><i data-lucide="play" class="w-3 h-3 text-teal-600"></i><span class="mono">${esc(l.rec)}</span></span>` : '';
+    return `<div onpointerdown="kbDown(event,'${l.id}',true)" data-lead="${l.id}"
+        class="kb-card lead-card bg-white rounded-lg border border-neutral-200 p-2.5 hover:border-teal-700 transition">
+      <div class="flex items-center gap-1.5 mb-1.5">
+        <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${sr.cls}"><i data-lucide="${sr.ic}" class="w-3 h-3"></i>${sr.label}</span>
+        ${rec}
+        <span class="ml-auto text-[10.5px] text-neutral-400">${esc(l.at)}</span>
+      </div>
+      ${showName ? `<div class="text-[12.5px] font-semibold truncate">${esc(l.name)}</div>` : ''}
+      <div class="text-[11.5px] mono text-neutral-500 truncate ${showName?'':'font-semibold text-neutral-700'}">${esc(l.phone)}</div>
+      ${leadNoteBlock(l)}
+      <div class="flex items-center gap-1.5 mt-2">
+        <button onpointerdown="event.stopPropagation()" onclick="convertLead('${l.id}')" class="flex-1 inline-flex items-center justify-center gap-1 text-[11.5px] font-medium px-2 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800 whitespace-nowrap"><i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>В бронь</button>
+        <button onpointerdown="event.stopPropagation()" onclick="askReject('${l.id}')" title="Отказ — в архив" class="shrink-0 inline-flex items-center justify-center w-[28px] h-[28px] rounded-md border border-neutral-200 text-neutral-400 hover:border-red-300 hover:text-red-600"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+      </div>
+    </div>`;
+  }
+  // Заметка лида (read-only на карточке; редактируется в карточке лида)
+  function leadNoteBlock(l){
+    if(!l.note) return '';
+    return `<div class="mt-1.5 flex items-start gap-1 text-[11px] text-neutral-600 leading-snug"><i data-lucide="sticky-note" class="w-3 h-3 mt-0.5 shrink-0 text-amber-500"></i><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(l.note)}</span></div>`;
+  }
+  // ── #27: редактирование названия этапа (inline) + добавление/удаление этапов ──
+  let customStageSeq = 0;
+  function editStage(key){
+    const col = document.querySelector(`.kb-col[data-stage="${key}"]`);
+    const s = STAGES.find((x)=> x.key===key);
+    if(!col || !s) return;
+    const labelEl = col.querySelector('.stage-label');
+    const inp = document.createElement('input');
+    inp.value = s.label;
+    inp.className = 'text-[12.5px] font-semibold bg-white border border-teal-600 rounded px-1 py-0.5 w-[110px] focus:outline-none';
+    labelEl.replaceWith(inp);
+    inp.focus(); inp.select();
+    let done=false;
+    const save=(commit)=>{ if(done) return; done=true; const v=inp.value.trim(); if(commit && v) s.label=v; renderKanban(); };
+    inp.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){e.preventDefault(); save(true);} else if(e.key==='Escape'){e.preventDefault(); save(false);} });
+    inp.addEventListener('blur',()=> save(true));
+  }
+  // редактирование названия лид-столбца (inline)
+  function editLeadStage(key){
+    const col = document.querySelector(`.kb-col[data-leadstage="${key}"]`);
+    const s = LEAD_STAGES.find((x)=> x.key===key);
+    if(!col || !s) return;
+    const labelEl = col.querySelector('.stage-label');
+    const inp = document.createElement('input');
+    inp.value = s.label;
+    inp.className = 'text-[12.5px] font-semibold bg-white border border-teal-600 rounded px-1 py-0.5 w-[110px] focus:outline-none';
+    labelEl.replaceWith(inp);
+    inp.focus(); inp.select();
+    let done=false;
+    const save=(commit)=>{ if(done) return; done=true; const v=inp.value.trim(); if(commit && v) s.label=v; renderKanban(); };
+    inp.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){e.preventDefault(); save(true);} else if(e.key==='Escape'){e.preventDefault(); save(false);} });
+    inp.addEventListener('blur',()=> save(true));
+  }
+  function addStage(){
+    customStageSeq++;
+    const key='custom'+customStageSeq;
+    STAGES.push({ key, label:'Новый этап', ic:'flag', tone:'neutral', custom:true });
+    renderKanban();
+    setTimeout(()=> editStage(key), 30);   // сразу даём переименовать
+  }
+  function removeStage(key){
+    const i=STAGES.findIndex((x)=> x.key===key);
+    if(i<0 || !STAGES[i].custom) return;
+    BOOKINGS.forEach((b)=>{ if(b.stageOverride===key) b.stageOverride=null; });  // брони вернутся по дате
+    STAGES.splice(i,1);
+    renderKanban();
+    toast('Этап удалён');
+  }
+  function kanbanCard(b){
+    const o=objById(b.obj), st=ST[b.status], lockless=!o.lock;
+    const code = (lockless||!b.codeState) ? '' :
+      `<span class="inline-flex items-center gap-1 text-[10.5px] mono font-bold px-1 rounded ${codePillCls[b.codeState]}"><span class="w-1.5 h-1.5 rounded-full ${codeDot[b.codeState]}"></span>${b.code?esc(b.code):'•••'}</span>`;
+    const grp = b.groupId ? `<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700"><i data-lucide="users" class="w-3 h-3"></i>совместная</span>` : '';
+    return `<div onpointerdown="kbDown(event,'${b.id}')" data-id="${b.id}" ${b.groupId?`data-group="${b.groupId}" onmouseenter="grpHi('${b.groupId}',1)" onmouseleave="grpHi('${b.groupId}',0)"`:''}
+        class="kb-card bg-white rounded-lg border border-neutral-200 p-2.5 hover:border-teal-700 transition">
+      <div class="flex items-center gap-1.5 mb-1">
+        <span class="w-2 h-2 rounded-full ${st.dotCls} shrink-0"></span>
+        <span class="text-[12.5px] font-semibold truncate">${esc(b.guest)}</span>
+        <span class="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded ${CH[b.ch].cls}">${CH[b.ch].label}</span>
+      </div>
+      <div class="text-[11.5px] text-neutral-500 truncate mb-1.5">${esc(o.name)} · ${fmtRange(b.ci,b.co)}</div>
+      <div class="flex items-center gap-1.5 flex-wrap">${code}${grp}<span class="ml-auto text-[11.5px] font-semibold mono text-neutral-700">${b.price?fmt(b.price)+' ₽':''}</span></div>
+      ${noteBlock(b)}
+    </div>`;
+  }
+  // ── Заметка брони (read-only на карточке; редактируется в модалке брони) ──
+  function noteBlock(b){
+    if(!b.note) return '';
+    return `<div class="mt-1.5 pt-1.5 border-t border-neutral-100 flex items-start gap-1 text-[11px] text-neutral-600 leading-snug"><i data-lucide="sticky-note" class="w-3 h-3 mt-0.5 shrink-0 text-amber-500"></i><span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(b.note)}</span></div>`;
+  }
+  // ячейка заметки в Списке (read-only; редактируется в карточке брони)
+  function noteListCell(b){
+    if(!b.note) return '<span class="text-[11px] text-neutral-300">—</span>';
+    return `<div class="flex items-start gap-1 text-[12px] text-neutral-600 max-w-[240px]"><i data-lucide="sticky-note" class="w-3 h-3 mt-0.5 shrink-0 text-amber-500"></i><span class="truncate">${esc(b.note)}</span></div>`;
+  }
+  // pointer-DnD (работает и на мыши, и на touch — HTML5 draggable на телефоне не тащится)
+  let kb=null;
+  function kbDown(e,id,isLead){
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    kb={ id, isLead:!!isLead, sx:e.clientX, sy:e.clientY, active:false, card:e.currentTarget, ghost:null };
+  }
+  function colUnder(x,y){ const el=document.elementFromPoint(x,y); return el && el.closest('.kb-col'); }
+  document.addEventListener('pointermove',(e)=>{
+    if(!kb) return;
+    if(!kb.active){
+      if(Math.hypot(e.clientX-kb.sx, e.clientY-kb.sy)<8) return;     // порог: ниже — это тап/скролл
+      kb.active=true; kb.card.classList.add('dragging');
+      const r=kb.card.getBoundingClientRect();
+      const g=kb.card.cloneNode(true); g.classList.add('kb-ghost'); g.classList.remove('dragging');
+      g.style.width=r.width+'px'; document.body.appendChild(g); kb.ghost=g;
+    }
+    e.preventDefault();
+    kb.ghost.style.left=e.clientX+'px'; kb.ghost.style.top=e.clientY+'px';
+    const col=colUnder(e.clientX,e.clientY);
+    document.querySelectorAll('.kb-col.drop-target').forEach((c)=>{ if(c!==col) c.classList.remove('drop-target'); });
+    if(col) col.classList.add('drop-target');
+  });
+  document.addEventListener('pointerup',(e)=>{
+    if(!kb) return;
+    if(!kb.active){ if(kb.isLead) openLead(kb.id); else openBooking(kb.id); kb=null; return; }   // не двигали → тап
+    const col=colUnder(e.clientX,e.clientY);
+    if(kb.ghost) kb.ghost.remove();
+    kb.card.classList.remove('dragging');
+    document.querySelectorAll('.kb-col.drop-target').forEach((c)=>c.classList.remove('drop-target'));
+    if(col){
+      const bookingStage=col.getAttribute('data-stage');     // бронь-колонка
+      const leadStage=col.getAttribute('data-leadstage');    // лид-колонка
+      if(kb.isLead){
+        if(bookingStage){ convertLead(kb.id); }              // лид брошен в бронь-зону → конверсия
+        else if(leadStage){ const l=leadById(kb.id); if(l && l.stage!==leadStage){ l.stage=leadStage; toast(`Лид → «${LEAD_STAGES.find((s)=>s.key===leadStage).label}»`); renderKanban(); } }
+      } else {
+        if(bookingStage){ const b=BOOKINGS.find((x)=>x.id===kb.id);
+          if(b && stageOf(b)!==bookingStage){ b.stageOverride=bookingStage; toast(`Бронь «${b.guest}» → «${STAGES.find((s)=>s.key===bookingStage).label}» (вручную)`); renderKanban(); } }
+        else if(leadStage){ toast('Бронь нельзя вернуть в лиды'); }
+      }
+    }
+    kb=null;
+  });
+
+  // ══════════ СПИСОК ══════════
+  function renderStatusChips(){
+    const chips=[{k:'all',label:'Все'},{k:'confirmed',label:'Подтверждены'},{k:'prepay',label:'Предоплата'},{k:'ota',label:'Новые'},{k:'cancelled',label:'Отменены'}];
+    const leadChips=[{k:'leads',label:'Лиды · необработанные'},{k:'rejected',label:'Отказы'}];
+    const cntOf=(k)=> k==='all'?BOOKINGS.length : k==='leads'?openLeads().length : k==='rejected'?LEADS.filter((l)=>l.status==='rejected').length : BOOKINGS.filter((b)=>b.status===k).length;
+    const mk=(c)=>{ const on=c.k===listStatus; const lead=c.k==='leads'||c.k==='rejected';
+      return `<button onclick="setListStatus('${c.k}')" class="text-[12px] font-medium px-2.5 py-1 rounded-full border transition ${on?(lead?'bg-slate-700 text-white border-slate-700':'bg-teal-700 text-white border-teal-700'):'border-neutral-200 text-neutral-600 hover:border-teal-700 bg-white'}">
+        ${c.label} <span class="mono ${on?'text-white/80':'text-neutral-400'}">${cntOf(c.k)}</span></button>`; };
+    document.getElementById('statusChips').innerHTML = chips.map(mk).join('')
+      + `<span class="w-px h-4 bg-neutral-200 mx-0.5"></span>` + leadChips.map(mk).join('');
+  }
+  function setListStatus(k){ listStatus=k; renderList(); }
+  // Список лидов (необработанные / отказы)
+  function renderLeadList(kind){
+    const body=document.getElementById('listBody');
+    const list = kind==='rejected' ? LEADS.filter((l)=>l.status==='rejected') : openLeads();
+    if(!list.length){
+      body.innerHTML = `<div class="bg-white rounded-xl border border-dashed border-neutral-300 py-14 px-6 text-center">
+        <div class="w-12 h-12 rounded-xl bg-slate-100 grid place-items-center mx-auto mb-3"><i data-lucide="${kind==='rejected'?'archive':'phone-incoming'}" class="w-6 h-6 text-slate-400"></i></div>
+        <div class="text-[14px] font-semibold mb-1">${kind==='rejected'?'Отказов пока нет':'Необработанных лидов нет'}</div>
+        <div class="text-[12.5px] text-neutral-500 max-w-md mx-auto">${kind==='rejected'?'Сюда попадают лиды, по которым бронь не родилась.':'Входящие звонки и заявки появляются здесь, пока вы их не обработали.'}</div>
+      </div>`;
+      lucide.createIcons(); return;
+    }
+    const rows=list.map((l)=>{ const sr=LEAD_SRC[l.src]||LEAD_SRC.manual; const showName=l.name&&l.name!==l.phone;
+      const stLbl = l.status==='rejected'?'Отказ':(l.stage==='work'?'В работе':'Новый');
+      const stCls = l.status==='rejected'?'bg-neutral-100 text-neutral-500':(l.stage==='work'?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-600');
+      return `<tr onclick="openLead('${l.id}')" class="border-t border-neutral-100 hover:bg-teal-50/40 cursor-pointer">
+        <td class="py-2.5 px-3"><div class="text-[13px] font-medium">${showName?esc(l.name):esc(l.phone)}</div><div class="text-[11px] text-neutral-400 mono">${esc(l.phone)}</div></td>
+        <td class="py-2.5 px-3"><span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${sr.cls}"><i data-lucide="${sr.ic}" class="w-3 h-3"></i>${sr.label}</span></td>
+        <td class="py-2.5 px-3 text-[12.5px] text-neutral-600 max-w-[320px] truncate">${esc(l.note||'—')}</td>
+        <td class="py-2.5 px-3">${l.rec?`<span class="inline-flex items-center gap-1 text-[11.5px] text-teal-700"><i data-lucide="play" class="w-3.5 h-3.5"></i><span class="mono">${esc(l.rec)}</span></span>`:'<span class="text-[11px] text-neutral-300">—</span>'}</td>
+        <td class="py-2.5 px-3"><span class="text-[11px] font-medium px-2 py-0.5 rounded-md ${stCls}">${stLbl}</span></td>
+        <td class="py-2.5 px-3 text-[12px] text-neutral-400 whitespace-nowrap">${esc(l.at)}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<div class="bg-white rounded-xl border border-neutral-200 overflow-x-auto">
+      <table class="w-full text-left min-w-[720px]">
+        <thead><tr class="text-[11px] uppercase tracking-wide text-neutral-400">
+          <th class="py-2 px-3 font-medium">Контакт</th><th class="py-2 px-3 font-medium">Источник</th>
+          <th class="py-2 px-3 font-medium">Заметка</th><th class="py-2 px-3 font-medium">Запись</th>
+          <th class="py-2 px-3 font-medium">Статус</th><th class="py-2 px-3 font-medium">Когда</th>
+        </tr></thead><tbody>${rows}</tbody>
+      </table></div>`;
+    lucide.createIcons();
+  }
+  function renderList(){
+    renderStatusChips();
+    if(listStatus==='leads'||listStatus==='rejected'){ renderLeadList(listStatus); return; }
+    let list = BOOKINGS.filter(passFilters);
+    if(listStatus!=='all') list=list.filter((b)=> b.status===listStatus);
+    list=list.slice().sort((a,b)=> a.ci-b.ci);
+    const body=document.getElementById('listBody');
+    if(!list.length){
+      body.innerHTML = `<div class="bg-white rounded-xl border border-dashed border-neutral-300 py-14 px-6 text-center">
+        <div class="w-12 h-12 rounded-xl bg-neutral-100 grid place-items-center mx-auto mb-3"><i data-lucide="calendar-x" class="w-6 h-6 text-neutral-400"></i></div>
+        <div class="text-[14px] font-semibold mb-1">Броней пока нет</div>
+        <div class="text-[12.5px] text-neutral-500 max-w-md mx-auto mb-4">Ждём первую бронь из iCal-фида площадки — это занимает до 30 минут после новой брони на Авито или Суточно. Можно добавить бронь вручную для теста.</div>
+        <button onclick="openCreate()" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-4 h-4"></i> Создать вручную</button>
+      </div>`;
+      lucide.createIcons(); return;
+    }
+    const rows = list.map((b)=>{
+      const o=objById(b.obj), st=ST[b.status], lockless=!o.lock;
+      const grp = b.groupId ? `<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700"><i data-lucide="users" class="w-3 h-3"></i>${groupMembers(b.groupId).length} номера</span>` : '';
+      const code = lockless ? '<span class="text-[11px] text-neutral-300">нет замка</span>'
+        : `<span class="inline-flex items-center gap-1 text-[11.5px] mono font-medium ${b.codeState==='loaded'?'text-emerald-700':b.codeState==='loading'?'text-amber-700':'text-red-600'}"><span class="w-1.5 h-1.5 rounded-full ${codeDot[b.codeState]}"></span>${b.code?esc(b.code):(b.codeState==='loading'?'грузится':'нет')}</span>`;
+      return `<tr onclick="openBooking('${b.id}')" data-id="${b.id}" ${b.groupId?`data-group="${b.groupId}" onmouseenter="grpHi('${b.groupId}',1)" onmouseleave="grpHi('${b.groupId}',0)"`:''} class="border-t border-neutral-100 hover:bg-teal-50/40 cursor-pointer">
+        <td class="py-2.5 px-3">
+          <div class="flex items-center gap-1.5"><span class="text-[13px] font-medium">${esc(b.guest)}</span>${grp}</div>
+          <div class="text-[11px] text-neutral-400 mono">${esc(b.phone)}</div>
+        </td>
+        <td class="py-2.5 px-3 text-[12.5px] text-neutral-600">${esc(o.name)}</td>
+        <td class="py-2.5 px-3 text-[12.5px] mono text-neutral-700 whitespace-nowrap">${fmtRange(b.ci,b.co)} <span class="text-neutral-400">· ${nights(b)} н.</span></td>
+        <td class="py-2.5 px-3"><span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${st.chip}"><span class="w-1.5 h-1.5 rounded-full ${st.dotCls}"></span>${st.label}</span></td>
+        <td class="py-2.5 px-3"><span class="text-[10.5px] font-medium px-1.5 py-0.5 rounded ${CH[b.ch].cls}">${CH[b.ch].label}</span></td>
+        <td class="py-2.5 px-3">${code}</td>
+        <td class="py-2.5 px-3">${noteListCell(b)}</td>
+        <td class="py-2.5 px-3 text-[12.5px] font-semibold mono text-right whitespace-nowrap">${b.price?fmt(b.price)+' ₽':'—'}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<div class="bg-white rounded-xl border border-neutral-200 overflow-x-auto">
+      <table class="w-full text-left min-w-[900px]">
+        <thead><tr class="text-[11px] uppercase tracking-wide text-neutral-400">
+          <th class="py-2 px-3 font-medium">Гость</th><th class="py-2 px-3 font-medium">Объект</th>
+          <th class="py-2 px-3 font-medium">Даты</th><th class="py-2 px-3 font-medium">Статус</th>
+          <th class="py-2 px-3 font-medium">Канал</th><th class="py-2 px-3 font-medium">Код</th>
+          <th class="py-2 px-3 font-medium">Заметка</th><th class="py-2 px-3 font-medium text-right">Сумма</th>
+        </tr></thead><tbody>${rows}</tbody>
+      </table></div>`;
+    lucide.createIcons();
+  }
+
+  // ══════════ ПЕРЕКЛЮЧЕНИЕ ВИДОВ ══════════
+  // показывать в тулбаре: режим/фильтры — только в Шахматке; навигацию дат+легенду — только в Классике
+  function syncToolbarVis(){
+    const board = view==='board';
+    document.querySelector('.tb-mode').style.display = board ? 'flex' : 'none';
+    document.querySelector('.tb-filters').style.display = board ? 'flex' : 'none';
+    document.getElementById('classicNav').style.display = (board && boardMode==='classic') ? 'flex' : 'none';
+    document.querySelector('.sb-legend').style.display = (board && boardMode==='classic') ? 'flex' : 'none';
+  }
+  function setView(v){
+    view=v;
+    document.getElementById('vwBoard').classList.toggle('on', v==='board');
+    document.getElementById('vwList').classList.toggle('on', v==='list');
+    document.getElementById('boardView').classList.toggle('hidden', v!=='board');
+    document.getElementById('listView').classList.toggle('hidden', v!=='list');
+    syncToolbarVis(); rerender(); lucide.createIcons();
+  }
+  function setBoardMode(m){
+    boardMode=m;
+    document.getElementById('modeClassic').classList.toggle('on', m==='classic');
+    document.getElementById('modeKanban').classList.toggle('on', m==='kanban');
+    document.getElementById('classicPanel').classList.toggle('hidden', m!=='classic');
+    document.getElementById('kanbanPanel').classList.toggle('hidden', m!=='kanban');
+    syncToolbarVis(); rerender(); lucide.createIcons();
+  }
+  function rerender(){
+    document.getElementById('hdrSub').textContent =
+      `${BOOKINGS.length} броней · ${BOOKINGS.filter(b=>['staying','soon_out'].includes(stageOf(b))&&b.status!=='cancelled').length} проживают сейчас`;
+    if(view==='board'){ if(boardMode==='classic') renderScoreboard(); else renderKanban(); }
+    else renderList();
+  }
+
+  // ══════════ КАРТОЧКА БРОНИ (модалка, всё на одном экране) ══════════
+  let curBk=null, bkDatesEdit=false;
+  function openBooking(id){
+    curBk=BOOKINGS.find((b)=>b.id===id);
+    bkDatesEdit=false;
+    renderBooking();
+    const m=document.getElementById('bookingModal'); m.classList.remove('hidden'); m.classList.add('flex');
+    lucide.createIcons();
+  }
+  function closeBooking(){ const m=document.getElementById('bookingModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function plural(n,one,few,many){ const a=n%10,b=n%100; if(a===1&&b!==11)return one; if(a>=2&&a<=4&&(b<10||b>=20))return few; return many; }
+
+  function sectionCard(title, ic, bodyHtml){
+    return `<div class="rounded-xl border border-neutral-200 p-4">
+      <div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="${ic}" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">${title}</span></div>
+      ${bodyHtml}</div>`;
+  }
+  function kv(label,val){ return `<div class="flex justify-between gap-4 py-1.5 border-b border-neutral-100 last:border-0">
+    <span class="text-[12.5px] text-neutral-500 shrink-0">${label}</span><span class="text-[13px] text-right text-neutral-800">${val}</span></div>`; }
+
+  function renderBooking(){
+    const b=curBk, o=objById(b.obj), st=ST[b.status], lockless=!o.lock;
+    // ── шапка ──
+    let head = `<div class="flex items-start gap-2">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 class="text-[18px] font-bold tracking-tight truncate">${esc(b.guest)}</h2>
+          <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${st.chip}"><span class="w-1.5 h-1.5 rounded-full ${st.dotCls}"></span>${st.label}</span>
+        </div>
+        <p class="text-[12.5px] text-neutral-500 mt-0.5">${esc(o.name)} · ${fmtRange(b.ci,b.co)} · ${nights(b)} ${plural(nights(b),'ночь','ночи','ночей')} · ${esc(b.src)}</p>
+      </div>
+      <button onclick="closeBooking()" class="w-8 h-8 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500 shrink-0"><i data-lucide="x" class="w-[18px] h-[18px]"></i></button>
+    </div>`;
+    if(b.groupId){
+      const mem=groupMembers(b.groupId);
+      head += `<div class="mt-2.5 rounded-lg bg-teal-50 border border-teal-200 px-3 py-2">
+        <div class="flex items-center gap-1.5 text-[12px] font-semibold text-teal-800 mb-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> Совместная бронь · ${mem.length} ${plural(mem.length,'номер','номера','номеров')}</div>
+        <div class="text-[11.5px] text-teal-700/80 mb-1.5">${esc(GROUPS[b.groupId].note)}</div>
+        <div class="flex flex-wrap gap-1.5">${mem.map((m)=>`<button onclick="openBooking('${m.id}')" class="text-[11px] font-medium px-2 py-0.5 rounded-md border ${m.id===b.id?'bg-teal-600 text-white border-teal-600':'bg-white text-teal-700 border-teal-200 hover:border-teal-400'}">${esc(objById(m.obj).name)}</button>`).join('')}</div>
+      </div>`;
+    }
+    document.getElementById('bkHead').innerHTML = head;
+
+    // ── код замка (блок) ──
+    let codeBlock;
+    if(lockless){
+      codeBlock = `<div class="text-center py-3"><i data-lucide="lock-open" class="w-6 h-6 text-neutral-400 mx-auto mb-1.5"></i><div class="text-[12.5px] text-neutral-500">У объекта нет замка — передайте ключи гостю вручную.</div></div>`;
+    } else {
+      const cs=b.codeState, lbl={loaded:'Загружен в замок',loading:'Загружается…',none:'Не загружен'}[cs];
+      codeBlock = `<div class="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-3 text-center mb-2.5">
+          <div class="text-[28px] font-bold mono tracking-wide ${cs==='loaded'?'text-emerald-700':cs==='loading'?'text-amber-600':'text-red-600'}">${b.code?esc(b.code):'• • • •'}</div>
+          <div class="inline-flex items-center gap-1.5 mt-1 text-[12px] font-medium ${cs==='loaded'?'text-emerald-700':cs==='loading'?'text-amber-700':'text-red-600'}"><span class="w-2 h-2 rounded-full ${codeDot[cs]}"></span>${lbl}</div>
+        </div>
+        ${kv('Назначение','Гостевой')}${kv('Тип кода','Временный')}
+        ${kv('Действует','<span class="mono">'+fmtD(b.ci)+' – '+fmtD(b.co)+'</span>')}
+        ${kv('Устройство', o.lock==='keybox'?'Кейбокс у двери':'TTLock G3 · Входная дверь')}
+        <button onclick="toast('Код отправлен гостю в ${CH[b.ch].label}')" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="send" class="w-3.5 h-3.5"></i> Отправить код гостю</button>`;
+    }
+
+    // ── тело: 2 колонки + переписка + история ──
+    const body = `
+      <div class="grid sm:grid-cols-2 gap-3">
+        ${sectionCard('Гость','user',
+          kv('Телефон','<span class="mono">'+esc(b.phone)+'</span>')+
+          kv('Канал связи','<span class="text-[11px] font-medium px-1.5 py-0.5 rounded '+CH[b.ch].cls+'">'+CH[b.ch].label+'</span>')+
+          kv('Гостей', b.guests+' '+plural(b.guests,'гость','гостя','гостей'))+
+          kv('Источник', esc(b.src))+
+          '<button onclick="toast(\'Здесь откроется карточка гостя — все его брони и переписки\')" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Карточка гостя</button>')}
+        ${sectionCard('Даты','calendar', bkDatesEdit ? (
+          kv('Объект', esc(o.name))+
+          '<div class="flex flex-col gap-1 py-1.5"><label class="text-[12px] text-neutral-500">Заезд</label><input id="ed_in" type="date" value="'+fmtISO(b.ci)+'" class="bk-input rounded-md border border-neutral-200 px-2.5 py-1.5 focus:outline-none focus:border-teal-700"></div>'+
+          '<div class="flex flex-col gap-1 py-1.5"><label class="text-[12px] text-neutral-500">Выезд</label><input id="ed_out" type="date" value="'+fmtISO(b.co)+'" class="bk-input rounded-md border border-neutral-200 px-2.5 py-1.5 focus:outline-none focus:border-teal-700"></div>'+
+          '<div class="flex gap-2 mt-2"><button onclick="saveDates()" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-3.5 h-3.5"></i> Сохранить</button><button onclick="cancelDates()" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 text-neutral-600 hover:border-neutral-400">Отмена</button></div>'
+        ) : (
+          kv('Объект', esc(o.name))+
+          kv('Заезд','<span class="mono">'+fmtD(b.ci)+'</span> с 14:00')+
+          kv('Выезд','<span class="mono">'+fmtD(b.co)+'</span> до 12:00')+
+          kv('Ночей', nights(b))+
+          '<button onclick="editDates()" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="pencil" class="w-3.5 h-3.5"></i> Изменить даты</button>'
+        ))}
+        ${sectionCard('Оплата','wallet',
+          kv('Статус оплаты', esc(b.paid))+
+          kv('Сумма', b.price?'<span class="mono font-semibold">'+fmt(b.price)+' ₽</span>':'—')+
+          '<div class="mt-2.5 flex flex-col gap-2">'+
+            '<button onclick="toast(\'Счёт на доплату через ЮKassa — в реализации\')" class="inline-flex items-center justify-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="receipt" class="w-4 h-4 text-teal-600"></i> Счёт на доплату</button>'+
+            '<button onclick="toast(\'Допродажа: поздний выезд — отправлю гостю предложение\')" class="inline-flex items-center justify-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400"><i data-lucide="trending-up" class="w-4 h-4"></i> Предложить поздний выезд</button>'+
+          '</div>')}
+        ${sectionCard('Код замка','key-round', codeBlock)}
+      </div>
+      <div class="mt-3">
+        ${sectionCard('Заметка','sticky-note',
+          '<textarea id="bkNoteField" oninput="if(curBk)curBk.note=this.value" onblur="rerender()" rows="2" placeholder="Заметка по брони — для кого, что подготовить, особые пожелания…" class="w-full text-[13px] border border-neutral-200 rounded-lg p-2.5 resize-y focus:outline-none focus:border-teal-700 leading-relaxed">'+esc(b.note||'')+'</textarea>')}
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3 mt-3">
+        ${sectionCard('Переписка','message-square',
+          '<div class="space-y-2">'+
+            '<div class="flex justify-start"><div class="max-w-[85%] bg-neutral-100 rounded-2xl rounded-bl-sm px-3 py-2 text-[12.5px]">Здравствуйте! Во сколько можно заехать?</div></div>'+
+            '<div class="flex justify-end"><div class="max-w-[85%] bg-teal-700 text-white rounded-2xl rounded-br-sm px-3 py-2 text-[12.5px]">Заезд с 14:00. Код пришлю утром в день заезда</div></div>'+
+          '</div>'+
+          '<button onclick="toast(\'Открываю полный диалог в Чатах\')" class="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Весь диалог в Чатах</button>')}
+        ${sectionCard('История','history', historyHtml(b))}
+      </div>`;
+    document.getElementById('bkBody').innerHTML = body;
+
+    document.getElementById('bkFoot').innerHTML = `
+      <button onclick="toast('Открываю диалог в Чатах')" class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-4 py-2.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="message-square" class="w-4 h-4"></i> Открыть чат</button>
+      <button onclick="copyLink()" class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-3 py-2.5 rounded-md border border-neutral-200 text-neutral-600 hover:border-teal-700"><i data-lucide="link" class="w-4 h-4"></i> Ссылка</button>
+      <button onclick="cancelBooking()" class="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-3 py-2.5 rounded-md border border-neutral-200 text-neutral-500 hover:border-red-400 hover:text-red-600"><i data-lucide="ban" class="w-4 h-4"></i> Отменить бронь</button>`;
+    lucide.createIcons();
+  }
+  function historyHtml(b){
+    const ev=[
+      {ic:'calendar-plus',tone:'neutral',t:'Создана',txt:`Из «${esc(b.src)}» · ${fmtRange(b.ci,b.co)}`},
+      {ic:'message-square',tone:'teal',t:'Приветствие',txt:`AI отправил приветствие в ${CH[b.ch].label}`},
+    ];
+    if(b.codeState==='loaded') ev.push({ic:'key-round',tone:'emerald',t:'Код выдан',txt:`Код ${esc(b.code||'')} загружен в замок`});
+    if(['staying','soon_out'].includes(stageOf(b))) ev.push({ic:'log-in',tone:'emerald',t:'Заезд',txt:'Гость заехал — код активирован'});
+    return `<div class="space-y-2.5">${ev.reverse().map((e)=>`
+      <div class="flex gap-2.5"><div class="w-7 h-7 rounded-lg bg-${e.tone}-50 grid place-items-center shrink-0"><i data-lucide="${e.ic}" class="w-3.5 h-3.5 text-${e.tone}-600"></i></div>
+      <div><div class="text-[12.5px] font-medium">${e.t}</div><div class="text-[12px] text-neutral-500">${e.txt}</div></div></div>`).join('')}</div>`;
+  }
+  function cancelBooking(){ if(!curBk)return; curBk.status='cancelled'; curBk.codeState='none'; curBk.code=null; toast('Бронь отменена'); closeBooking(); rerender(); }
+  // правка дат внутри карточки (вместо растягивания на шахматке)
+  function editDates(){ bkDatesEdit=true; renderBooking(); lucide.createIcons(); }
+  function cancelDates(){ bkDatesEdit=false; renderBooking(); lucide.createIcons(); }
+  function saveDates(){
+    const ci=parseISO(document.getElementById('ed_in').value), co=parseISO(document.getElementById('ed_out').value);
+    if(!(co>ci)){ toast('Дата выезда должна быть позже заезда'); return; }
+    curBk.ci=ci; curBk.co=co; bkDatesEdit=false; renderBooking(); rerender();
+    toast('Даты обновлены: '+fmtRange(curBk.ci,curBk.co)+' · '+nights(curBk)+' '+plural(nights(curBk),'ночь','ночи','ночей'));
+  }
+
+  // ══════════ СОЗДАНИЕ БРОНИ ══════════
+  function openCreate(objId, start, end){
+    document.getElementById('c_obj').innerHTML=OBJECTS.map((o)=>`<option value="${o.id}" ${o.id===objId?'selected':''}>${esc(o.name)}</option>`).join('');
+    document.getElementById('c_guest').value=''; document.getElementById('c_phone').value=''; document.getElementById('c_sum').value='';
+    document.getElementById('c_ch').selectedIndex=0; document.getElementById('c_status').selectedIndex=0;
+    document.getElementById('c_src').selectedIndex=0; document.getElementById('c_guests').value=2;
+    document.getElementById('c_gencode').checked=true;
+    document.getElementById('c_in').value=fmtISO(start||addDays(TODAY,1));
+    document.getElementById('c_out').value=fmtISO(end||addDays(TODAY,4));
+    updateCodeHint();
+    const m=document.getElementById('createModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+    setTimeout(()=>document.getElementById('c_guest').focus(),50);
+  }
+  function closeCreate(){ const m=document.getElementById('createModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function updateCodeHint(){
+    const o=objById(document.getElementById('c_obj').value); const hint=document.getElementById('c_codehint');
+    if(o && !o.lock){ hint.classList.remove('hidden'); hint.querySelector('span').textContent='У этого объекта нет замка — код выдать нельзя. Передайте ключи вручную.'; document.getElementById('c_gencode').checked=false; }
+    else if(o && o.lock==='keybox'){ hint.classList.remove('hidden'); hint.querySelector('span').textContent='Кейбокс: один активный код на объект. Новый код заменит предыдущий.'; }
+    else hint.classList.add('hidden');
+  }
+  document.getElementById('c_obj').addEventListener('change', updateCodeHint);
+  function submitCreate(){
+    const guest=document.getElementById('c_guest').value.trim();
+    if(!guest){ toast('Введите имя гостя'); document.getElementById('c_guest').focus(); return; }
+    const ci=parseISO(document.getElementById('c_in').value), co=parseISO(document.getElementById('c_out').value);
+    if(!(co>ci)){ toast('Дата выезда должна быть позже заезда'); return; }
+    const objId=document.getElementById('c_obj').value, o=objById(objId);
+    const gen=document.getElementById('c_gencode').checked && !!o.lock;
+    BOOKINGS.push({ id:'b'+Date.now(), obj:objId, guest, phone:document.getElementById('c_phone').value.trim()||'—',
+      ch:document.getElementById('c_ch').value, status:document.getElementById('c_status').value, ci, co,
+      price:parseInt(document.getElementById('c_sum').value,10)||0,
+      code: gen?String(1000+Math.floor(Math.random()*9000))+'#':null, codeState: gen?'loading':'none',
+      guests:parseInt(document.getElementById('c_guests').value,10)||1, src:document.getElementById('c_src').value, paid:'не оплачено' });
+    // если бронь родилась из лида — лид уходит в архив (converted)
+    let fromLead=false;
+    if(window._pendingLead){ const l=leadById(window._pendingLead); if(l){ l.status='converted'; fromLead=true; } window._pendingLead=null; }
+    closeCreate(); rerender();
+    toast(fromLead ? 'Лид сконвертирован → бронь «'+guest+'»' : 'Бронь «'+guest+'» создана'+(gen?' · код генерируется':''));
+  }
+
+  // ══════════ ДЕЙСТВИЯ ЛИДА ══════════
+  // Конверсия Лид → Бронь: открыть форму брони с предзаполнением из лида
+  function convertLead(id){
+    const l=leadById(id); if(!l) return;
+    closeLead();
+    openCreate();
+    window._pendingLead=id;
+    const name=(l.name && l.name!==l.phone) ? l.name : '';
+    document.getElementById('c_guest').value=name;
+    document.getElementById('c_phone').value=(l.phone && l.phone!=='—') ? l.phone : '';
+    // источник: звонок/сайт → «Прямая», площадка → оставляем «Внесена вручную»
+    const srcSel=document.getElementById('c_src'); const want=(l.src==='call'||l.src==='site')?'Прямая':'Вручную';
+    [...srcSel.options].forEach((o,i)=>{ if(o.value===want) srcSel.selectedIndex=i; });
+    // плашка «из лида»
+    const head=document.querySelector('#createModal .text-\\[13px\\].text-neutral-500');
+    if(head) head.textContent='Из лида: '+(name||l.phone)+(l.rec?' · запись разговора прикреплена':'');
+    setTimeout(()=>document.getElementById(name?'c_in':'c_guest').focus(),60);
+  }
+  // защита от дурака: отказ требует подтверждения
+  let rejectPending=null;
+  function askReject(id){
+    const l=leadById(id); if(!l) return;
+    rejectPending=id;
+    document.getElementById('rejectName').textContent=(l.name&&l.name!==l.phone)?l.name:l.phone;
+    const m=document.getElementById('rejectModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeReject(){ rejectPending=null; const m=document.getElementById('rejectModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function doReject(){ if(rejectPending){ const id=rejectPending; closeReject(); rejectLead(id); } }
+  function rejectLead(id){
+    const l=leadById(id); if(!l) return;
+    l.status='rejected'; closeLead(); renderKanban(); renderList && (view==='list'&&renderList());
+    toast('Лид «'+((l.name&&l.name!==l.phone)?l.name:l.phone)+'» → отказ (в архиве)','warn');
+  }
+  // Модалка просмотра лида (тап по карточке)
+  function openLead(id){
+    const l=leadById(id); if(!l) return;
+    const sr=LEAD_SRC[l.src]||LEAD_SRC.manual;
+    const showName=l.name && l.name!==l.phone;
+    document.getElementById('ldHead').innerHTML=`
+      <div class="flex items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-slate-100 grid place-items-center"><i data-lucide="${sr.ic}" class="w-5 h-5 text-slate-600"></i></span>
+        <div class="min-w-0">
+          <div class="text-[16px] font-semibold truncate">${showName?esc(l.name):esc(l.phone)}</div>
+          <div class="text-[12.5px] text-neutral-500">Лид · ${sr.label} · ${esc(l.at)}</div>
+        </div>
+        <button onclick="closeLead()" class="ml-auto w-9 h-9 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>`;
+    document.getElementById('ldBody').innerHTML=`
+      <div class="space-y-3">
+        <div class="flex items-center gap-2 text-[13px]"><i data-lucide="phone" class="w-4 h-4 text-neutral-400"></i><span class="mono">${esc(l.phone)}</span></div>
+        ${l.rec?`<div class="flex items-center gap-2 p-2.5 rounded-lg bg-neutral-50 border border-neutral-200"><button class="w-8 h-8 rounded-full bg-teal-700 text-white grid place-items-center hover:bg-teal-800 shrink-0"><i data-lucide="play" class="w-4 h-4"></i></button><div class="flex-1"><div class="h-1.5 rounded-full bg-neutral-200"><div class="h-1.5 rounded-full bg-teal-600" style="width:0%"></div></div></div><span class="text-[12px] mono text-neutral-500">${esc(l.rec)}</span></div>`:`<div class="text-[12.5px] text-neutral-400 flex items-center gap-2"><i data-lucide="mic-off" class="w-4 h-4"></i>Записи разговора нет</div>`}
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[12.5px] font-medium text-neutral-600 flex items-center gap-1.5"><i data-lucide="sticky-note" class="w-3.5 h-3.5 text-amber-500"></i> Заметка</label>
+          <textarea oninput="var ll=leadById('${l.id}'); if(ll) ll.note=this.value" onblur="renderKanban()" rows="3" placeholder="Что спрашивал гость, что обещали…" class="w-full text-[13px] border border-neutral-200 rounded-lg p-2.5 resize-y focus:outline-none focus:border-teal-700 leading-relaxed">${esc(l.note||'')}</textarea>
+        </div>
+      </div>`;
+    document.getElementById('ldFoot').innerHTML=`
+      <button onclick="askReject('${l.id}')" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 text-neutral-600 hover:border-red-300 hover:text-red-600">Отказ</button>
+      <button onclick="convertLead('${l.id}')" class="ml-auto inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="calendar-plus" class="w-4 h-4"></i>Создать бронь</button>`;
+    const m=document.getElementById('leadModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeLead(){ const m=document.getElementById('leadModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  // Создание лида вручную
+  function openCreateLead(){
+    document.getElementById('nl_name').value=''; document.getElementById('nl_phone').value=''; document.getElementById('nl_note').value='';
+    document.getElementById('nl_src').selectedIndex=0;
+    const m=document.getElementById('leadCreateModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+    setTimeout(()=>document.getElementById('nl_phone').focus(),50);
+  }
+  function closeCreateLead(){ const m=document.getElementById('leadCreateModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function submitLead(){
+    const phone=document.getElementById('nl_phone').value.trim();
+    const name=document.getElementById('nl_name').value.trim();
+    if(!phone && !name){ toast('Укажите телефон или имя'); return; }
+    LEADS.unshift({ id:'l'+(++leadSeq), name:name||phone||'Без имени', phone:phone||'—',
+      src:document.getElementById('nl_src').value, stage:'new', status:'open',
+      note:document.getElementById('nl_note').value.trim(), rec:null, at:'только что' });
+    closeCreateLead();
+    if(boardMode!=='kanban'){ setBoardMode('kanban'); } else { renderKanban(); }
+    toast('Лид добавлен в «Новые»','success');
+  }
+
+  function refreshIcal(){ toast('Запросил обновление iCal у площадок…'); }
+  function copyLink(){ const u='bronist.ru/b/'+(curBk?curBk.id:'demo'); if(navigator.clipboard) navigator.clipboard.writeText(u).catch(()=>{}); toast('Ссылка на страницу брони скопирована'); }
+
+  // ── sidebar / drawer / support ──
+  function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer(){ document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer(){ document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport(){ document.getElementById('supportMenu').classList.toggle('hidden'); }
+  document.addEventListener('click',(e)=>{ if(!e.target.closest('#supportMenu')&&!e.target.closest('button[onclick*="toggleSupport"]')) document.getElementById('supportMenu').classList.add('hidden'); });
+  function toast(msg, type){
+    const icons={success:['check-circle','#34d399'],warn:['alert-triangle','#fbbf24'],error:['alert-circle','#f87171'],info:['info','#5eead4']};
+    const [ic,col]=icons[type]||icons.info;
+    const el=document.getElementById('toast');
+    el.innerHTML=`<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt=setTimeout(()=>el.classList.add('hidden'),2400);
+  }
+  function goScreen(key){ try{ if(window.top&&window.top!==window){window.top.location.hash=key;} else {toast('Переход → '+key,'info');} }catch(e){ toast('Переход → '+key,'info'); } }
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ closeCreate(); closeBooking(); closeObjModal(); closeLead(); closeCreateLead(); closeReject(); if(fullscreen) toggleFullscreen(); } });
+
+  (function(){ const sp=document.getElementById('fltSpace'); const spaces=[...new Set(OBJECTS.map(o=>o.space))];
+    sp.innerHTML='<option value="all">Все пространства</option>'+spaces.map(s=>`<option value="${s}">${s}</option>`).join(''); })();
+
+  // дефолт плотности: при большом числе объектов открываем в Компакте (чтобы влезало)
+  density = OBJECTS.length > 20 ? 'compact' : 'comfort';
+  syncDensity();
+
+  // листание шахматки горизонтальным жестом трекпада/колеса (deltaX) — без захвата мышью
+  (function(){
+    const sc=document.getElementById('sbScroller'); if(!sc) return;
+    let acc=0;
+    sc.addEventListener('wheel',(e)=>{
+      if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;   // вертикальный жест — обычный скролл, не листаем
+      e.preventDefault();
+      const tr=sc.querySelector('.sb-track');
+      const step=(tr ? tr.getBoundingClientRect().width/zoom : 60) * 0.5;  // ~полклетки на шаг
+      acc += e.deltaX;
+      const n=Math.trunc(acc/step);
+      if(n!==0){ acc-=n*step; winOffset+=n; renderScoreboard(); }
+    }, {passive:false});
+  })();
+  syncZoom(); setBoardMode('classic'); setView('board'); lucide.createIcons();
+</script>
+</body>
+</html>

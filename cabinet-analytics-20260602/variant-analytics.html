@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Аналитика</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* активная кнопка периода */
+  .seg-btn.active { background:#0f766e; color:#fff; border-color:#0f766e; }
+
+  /* ── MOBILE (≤768px) — наследовано из B5 ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    /* KPI на mobile — компактнее (по B5): меньше donut и шрифт значения, чтобы цифра не обрезалась */
+    #kpiRow { grid-auto-rows: 1fr; }
+    #kpiRow > div { padding: 12px !important; }
+    /* значение не обрезаем — переносим (donut узкий, места под "154 тыс ₽" мало) */
+    .kpi-val { font-size: 18px !important; white-space: normal !important; overflow: visible !important; text-overflow: clip !important; line-height: 1.1 !important; }
+    .kpi-donut svg { width: 40px !important; height: 40px !important; }
+  }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5; название экрана — Аналитика) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Аналитика</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <section class="content-pad max-w-[1100px] mx-auto px-6 py-6">
+
+        <!-- ШАПКА: заголовок + переключатель периода -->
+        <div class="flex flex-col gap-3 mb-4">
+          <div class="flex items-end gap-3 flex-wrap">
+            <div>
+              <h1 class="text-[20px] font-bold tracking-tight">Аналитика</h1>
+              <p id="periodSub" class="text-[13px] text-neutral-500"></p>
+            </div>
+            <!-- демо-переключатель состояния данных (только мокап, не продакшн) -->
+            <div class="ml-auto flex items-center gap-1.5 border border-dashed border-neutral-300 rounded-lg px-2 py-1 bg-white" title="Только для демо: показывает три состояния — в продукте определяется возрастом аккаунта">
+              <i data-lucide="flask-conical" class="w-3.5 h-3.5 text-neutral-400"></i>
+              <span class="text-[10.5px] text-neutral-400 hidden sm:inline">демо:</span>
+              <div id="stateSeg" class="flex items-center gap-0.5"></div>
+            </div>
+          </div>
+          <!-- переключатель периода -->
+          <div id="periodSeg" class="flex items-center gap-1 flex-wrap"></div>
+        </div>
+
+        <!-- partial-баннер -->
+        <div id="partialBanner" class="hidden mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <i data-lucide="hourglass" class="w-[18px] h-[18px] text-amber-600 shrink-0 mt-0.5"></i>
+          <div class="text-[12.5px] text-amber-800 leading-snug">
+            <span class="font-semibold">Аккаунту меньше 30 дней.</span> Месячная сводка (MTD) появится в конце первого месяца. Пока показываем то, что уже накопилось — числа будут уточняться.
+          </div>
+        </div>
+
+        <!-- empty-состояние (<7 дней) -->
+        <div id="emptyState" class="hidden">
+          <div class="bg-white rounded-xl border border-dashed border-neutral-300 py-14 px-6 text-center">
+            <div class="w-14 h-14 rounded-2xl bg-teal-50 grid place-items-center mx-auto mb-4"><i data-lucide="line-chart" class="w-7 h-7 text-teal-600"></i></div>
+            <div class="text-[15px] font-semibold mb-1.5">Данных пока мало — приходите через неделю</div>
+            <div class="text-[13px] text-neutral-500 max-w-md mx-auto leading-snug">AI начинает считать метрики с первой брони и обновляет их каждый день. Как только наберётся неделя, здесь появятся выручка, загрузка и эффективность AI.</div>
+          </div>
+        </div>
+
+        <!-- основной дашборд -->
+        <div id="dashboard">
+
+          <!-- ── TOP-РЯД KPI (кликабельный селектор фокус-метрики) ── -->
+          <div class="flex items-center gap-1.5 mb-2 text-[11.5px] text-neutral-400">
+            <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5"></i> Нажмите на метрику — ниже раскроется детализация
+          </div>
+          <div id="kpiRow" class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5"></div>
+
+          <!-- ── ДЕТАЛИЗАЦИЯ ВЫБРАННОЙ МЕТРИКИ (перестраивается по клику) ── -->
+          <div id="detail"></div>
+
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Аналитика активна) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Брони' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика', active:true },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  // ════════════════ ДАННЫЕ ════════════════
+  const OBJ_COUNT = 22; // оператор ~20 объектов
+
+  // доли каналов (стабильны между периодами — упрощение мокапа)
+  // каналы — один бренд-тон (teal), различаем оттенком, без радуги
+  const CHAN = [
+    { name:'Авито',    color:'#0f766e', share:0.38 },
+    { name:'Суточно',  color:'#0d9488', share:0.27 },
+    { name:'Островок', color:'#14b8a6', share:0.18 },
+    { name:'Циан',     color:'#2dd4bf', share:0.09 },
+    { name:'Прямые',   color:'#5eead4', share:0.08 },
+  ];
+  // доли топ-объектов по выручке
+  const TOPOBJ = [
+    { name:'Тверская 15', s:0.17 }, { name:'Садовая 3', s:0.15 },
+    { name:'Дачная 12', s:0.13 },   { name:'Ленина 42', s:0.11 }, { name:'Арбат 8', s:0.08 },
+  ];
+  // загрузка по объектам = общая ± смещение
+  const OCCOFFSET = [
+    { name:'Садовая 3', d:18 }, { name:'Тверская 15', d:12 }, { name:'Ленина 42', d:1 },
+    { name:'Арбат 8', d:-6 }, { name:'Дачная 12', d:-22 }, { name:'Победы 7', d:-30 },
+  ];
+
+  const DATA = {
+    current: { label:'Этот месяц', sub:'1–2 июня', days:2, revenue:154200, surcharge:9800, occ:68, bookings:14, los:3.1, conv:34, cancel:5, repeat:12, lead:9, prevConv:31, prevCancel:6,
+      prevRevenue:138000, prevOcc:64, prevBookings:12, prevAiSelf:90, prevSurcharge:8200,
+      ai:{ self:92, esc:3, dialogs:38, resp:'12 сек', upN:2, upR:9800, hours:4 },
+      series:[ {l:'1 июн',r:74000,s:4800}, {l:'2 июн',r:80200,s:5000} ] },
+    prev: { label:'Прошлый месяц', sub:'май', days:31, revenue:2340000, surcharge:118000, occ:71, bookings:96, los:3.4, conv:33, cancel:6, repeat:18, lead:12, prevConv:32, prevCancel:7,
+      prevRevenue:2180000, prevOcc:68, prevBookings:88, prevAiSelf:93, prevSurcharge:108000,
+      ai:{ self:94, esc:32, dialogs:540, resp:'14 сек', upN:28, upR:118000, hours:61 },
+      series:[ {l:'1 нед',r:520000,s:24000},{l:'2 нед',r:610000,s:31000},{l:'3 нед',r:540000,s:27000},{l:'4 нед',r:480000,s:22000},{l:'5 нед',r:190000,s:14000} ] },
+    q: { label:'3 месяца', sub:'апрель – июнь', days:92, revenue:4670000, surcharge:235000, occ:69, bookings:198, los:3.4, conv:32, cancel:6, repeat:19, lead:13, prevConv:31, prevCancel:7,
+      prevRevenue:4100000, prevOcc:66, prevBookings:182, prevAiSelf:92, prevSurcharge:205000,
+      ai:{ self:93, esc:70, dialogs:1080, resp:'13 сек', upN:55, upR:235000, hours:122 },
+      series:[ {l:'Апр',r:1490000,s:78000},{l:'Май',r:2340000,s:118000},{l:'Июн',r:840000,s:39000} ] },
+    h: { label:'6 месяцев', sub:'январь – июнь', days:181, revenue:8900000, surcharge:430000, occ:64, bookings:372, los:3.5, conv:31, cancel:7, repeat:20, lead:14, prevConv:30, prevCancel:8,
+      prevRevenue:8200000, prevOcc:62, prevBookings:350, prevAiSelf:91, prevSurcharge:395000,
+      ai:{ self:92, esc:150, dialogs:2010, resp:'15 сек', upN:102, upR:430000, hours:228 },
+      series:[ {l:'Янв',r:1180000,s:52000},{l:'Фев',r:1240000,s:58000},{l:'Мар',r:1610000,s:79000},{l:'Апр',r:1490000,s:78000},{l:'Май',r:2340000,s:118000},{l:'Июн',r:1040000,s:45000} ] },
+    y: { label:'12 месяцев', sub:'июль 2025 – июнь 2026', days:365, revenue:16400000, surcharge:790000, occ:62, bookings:690, los:3.5, conv:30, cancel:7, repeat:22, lead:15, prevConv:29, prevCancel:8,
+      prevRevenue:14900000, prevOcc:60, prevBookings:640, prevAiSelf:90, prevSurcharge:720000,
+      ai:{ self:91, esc:320, dialogs:3720, resp:'16 сек', upN:188, upR:790000, hours:421 },
+      series:[ {l:'III·25',r:3600000,s:165000},{l:'IV·25',r:3900000,s:182000},{l:'I·26',r:4030000,s:189000},{l:'II·26',r:4870000,s:254000} ] },
+    all: { label:'Всё время', sub:'с августа 2024', days:670, revenue:21200000, surcharge:1020000, occ:61, bookings:905, los:3.5, conv:30, cancel:7, repeat:23, lead:15, prevConv:null, prevCancel:null,
+      prevRevenue:null, prevOcc:null, prevBookings:null, prevAiSelf:null, prevSurcharge:null,
+      ai:{ self:91, esc:430, dialogs:4900, resp:'16 сек', upN:240, upR:1020000, hours:555 },
+      series:[ {l:'2024',r:4200000,s:198000},{l:'2025',r:9100000,s:430000},{l:'2026',r:7900000,s:392000} ] },
+  };
+  const PERIOD_ORDER = [
+    ['current','Этот месяц'], ['prev','Прошлый'], ['q','3 мес'], ['h','6 мес'], ['y','12 мес'], ['all','Всё'],
+  ];
+
+  let period = 'current';
+  let dataState = 'full'; // full | partial | empty
+  let metric = 'revenue'; // revenue | surcharge | occupancy | ai | bookings — выбранная метрика для детализации
+
+  // ════════════════ ФОРМАТ ════════════════
+  const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
+  function rub(n){
+    if (n >= 1e6) return (n/1e6).toFixed(2).replace(/\.?0+$/,'').replace('.',',') + ' млн ₽';
+    if (n >= 1e5) return fmt(Math.round(n/1e3)) + ' тыс ₽';
+    return fmt(n) + ' ₽';
+  }
+  function rubAxis(n){
+    if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'').replace('.',',') + 'м';
+    if (n >= 1e3) return Math.round(n/1e3) + 'к';
+    return Math.round(n);
+  }
+  const clamp = (n) => Math.max(0, Math.min(100, n));
+
+  // ════════════════ SVG-ЧАРТЫ ════════════════
+  // donut: segs=[{val,color}] — круглая SVG-диаграмма (стиль B5), не sparkline
+  function donut(segs, centerMain, centerSub, size){
+    size = size || 88;
+    const sw = size <= 60 ? 8 : 11;
+    const r = (size - sw) / 2;
+    const cx = size / 2, c = 2 * Math.PI * r;
+    const total = segs.reduce((s,x)=>s+x.val,0) || 1;
+    let off = 0;
+    const rings = segs.map((s)=>{
+      const len = c * s.val / total;
+      const el = `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(c-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cx})"/>`;
+      off += len; return el;
+    }).join('');
+    const cm = centerMain ? `<text x="${cx}" y="${centerSub ? cx-4 : cx}" text-anchor="middle" dominant-baseline="central" class="mono" font-size="${size<=60?14:18}" font-weight="700" fill="#171717">${centerMain}</text>` : '';
+    const cs = centerSub ? `<text x="${cx}" y="${cx + 11}" text-anchor="middle" dominant-baseline="central" font-size="9" fill="#a3a3a3">${centerSub}</text>` : '';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#f1f1f1" stroke-width="${sw}"/>
+      ${rings}${cm}${cs}</svg>`;
+  }
+
+  // линейный чарт (две линии: выручка teal + допродажи emerald пунктир)
+  function lineChart(series){
+    const W=640, H=190, pr=16, pt=16, pb=30, innerL=46;
+    const n = series.length;
+    const max = Math.max(...series.map(p=>p.r)) * 1.18 || 1;
+    const xs = (i) => n === 1 ? innerL + (W-innerL-pr)/2 : innerL + (W-innerL-pr) * i / (n-1);
+    const ys = (v) => pt + (H-pt-pb) * (1 - v/max);
+    const ptsR = series.map((p,i)=>`${xs(i).toFixed(1)},${ys(p.r).toFixed(1)}`).join(' ');
+    const ptsS = series.map((p,i)=>`${xs(i).toFixed(1)},${ys(p.s).toFixed(1)}`).join(' ');
+    const area = `${innerL},${ys(0).toFixed(1)} ${ptsR} ${xs(n-1).toFixed(1)},${ys(0).toFixed(1)}`;
+    const ticks = [0, max/2, max];
+    const grid = ticks.map((t)=>{
+      const y = ys(t);
+      return `<line x1="${innerL}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}" stroke="#f0f0f0"/>
+        <text x="${innerL-6}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#a3a3a3" class="mono">${rubAxis(t)}</text>`;
+    }).join('');
+    const xlabels = series.map((p,i)=>`<text x="${xs(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="9.5" fill="#737373">${p.l}</text>`).join('');
+    const dotsR = series.map((p,i)=>`<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.r).toFixed(1)}" r="2.6" fill="#0f766e"/>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto" preserveAspectRatio="xMidYMid meet">
+      ${grid}
+      <polygon points="${area}" fill="#0f766e" opacity="0.07"/>
+      <polyline points="${ptsR}" fill="none" stroke="#0f766e" stroke-width="2.2" stroke-linejoin="round"/>
+      <polyline points="${ptsS}" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round"/>
+      ${dotsR}${xlabels}
+    </svg>`;
+  }
+
+  // линейный чарт с одной линией (для загрузки / AI / броней)
+  function lineChartSingle(points, color, fmtAxis, cap){
+    const W=640, H=190, pr=16, pt=16, pb=30, innerL=46;
+    const n = points.length;
+    const max = Math.min(cap || Infinity, Math.max(...points.map(p=>p.v)) * 1.18) || 1;
+    const xs = (i) => n === 1 ? innerL + (W-innerL-pr)/2 : innerL + (W-innerL-pr) * i / (n-1);
+    const ys = (v) => pt + (H-pt-pb) * (1 - v/max);
+    const pts = points.map((p,i)=>`${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join(' ');
+    const area = `${innerL},${ys(0).toFixed(1)} ${pts} ${xs(n-1).toFixed(1)},${ys(0).toFixed(1)}`;
+    const ticks = [0, max/2, max];
+    const grid = ticks.map((t)=>{
+      const y = ys(t);
+      return `<line x1="${innerL}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}" stroke="#f0f0f0"/>
+        <text x="${innerL-6}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#a3a3a3" class="mono">${fmtAxis(t)}</text>`;
+    }).join('');
+    const xlabels = points.map((p,i)=>`<text x="${xs(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="9.5" fill="#737373">${p.l}</text>`).join('');
+    const dots = points.map((p,i)=>`<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.v).toFixed(1)}" r="2.6" fill="${color}"/>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto" preserveAspectRatio="xMidYMid meet">
+      ${grid}
+      <polygon points="${area}" fill="${color}" opacity="0.07"/>
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round"/>
+      ${dots}${xlabels}
+    </svg>`;
+  }
+
+  // карточка-секция детализации
+  function secCard(title, ic, bodyHtml, note){
+    return `<div class="bg-white rounded-xl border border-neutral-200 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="${ic}" class="w-[18px] h-[18px] text-teal-600"></i>
+        <span class="text-[14px] font-semibold">${title}</span>
+        ${note ? `<span class="text-[11.5px] text-neutral-400 ml-auto">${note}</span>` : ''}
+      </div>${bodyHtml}</div>`;
+  }
+  // ряд мини-метрик
+  function miniCards(items){
+    return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">` + items.map(m=>
+      `<div class="rounded-lg bg-neutral-50 px-3 py-2.5">
+        <div class="flex items-center gap-1.5 text-[11.5px] text-neutral-500 mb-1">${m.ic?`<i data-lucide="${m.ic}" class="w-3.5 h-3.5 text-teal-600"></i>`:''}<span class="truncate">${m.l}</span></div>
+        <div class="mono text-[16px] font-bold ${m.accent?'text-emerald-600':'text-neutral-800'}">${m.v}</div>
+      </div>`).join('') + `</div>`;
+  }
+
+  // горизонтальные бары
+  function barsH(items, fmtv){
+    const max = Math.max(...items.map(i=>i.value)) || 1;
+    return `<div class="space-y-2.5">` + items.map((i)=>{
+      const w = Math.max(3, i.value / max * 100);
+      return `<div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[12.5px] text-neutral-700 truncate">${i.label}</span>
+          <span class="text-[12px] mono font-semibold text-neutral-700 shrink-0 ml-2">${fmtv(i.value)}</span>
+        </div>
+        <div class="h-2 rounded-full bg-neutral-100 overflow-hidden"><div class="h-full rounded-full" style="width:${w.toFixed(1)}%;background:${i.color || '#0f766e'}"></div></div>
+      </div>`;
+    }).join('') + `</div>`;
+  }
+
+  // дельта-чип к прошлому периоду
+  function delta(cur, prev){
+    if (prev == null) return '';
+    const d = prev === 0 ? 0 : ((cur - prev) / prev * 100);
+    const up = d >= 0;
+    const cls = up ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50';
+    const ic = up ? 'trending-up' : 'trending-down';
+    return `<span class="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded ${cls}"><i data-lucide="${ic}" class="w-3 h-3"></i>${up?'+':'−'}${Math.abs(d).toFixed(0)}%</span>`;
+  }
+
+  // ════════════════ KPI-ПЛИТКА ════════════════
+  function kpiTile(o){
+    const sel = o.active ? 'border-teal-700 ring-2 ring-teal-700' : 'border-neutral-200 hover:border-teal-700';
+    const click = o.key ? `onclick="setMetric('${o.key}')"` : '';
+    return `<div ${click} role="button" tabindex="0" class="bg-white rounded-xl border ${sel} p-4 transition flex flex-col cursor-pointer">
+      <div class="text-[12.5px] ${o.active?'text-teal-700 font-semibold':'text-neutral-600'} mb-2">${o.name}</div>
+      <div class="flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 mb-1.5"><i data-lucide="${o.icon}" class="w-[18px] h-[18px] text-teal-600"></i>${o.delta || ''}</div>
+          <div class="kpi-val mono text-[20px] font-bold leading-none truncate">${o.value}</div>
+          <div class="text-[11.5px] ${o.subCls || 'text-neutral-500'} mt-1.5 leading-tight">${o.sub}</div>
+        </div>
+        <div class="kpi-donut shrink-0">${o.donut}</div>
+      </div>
+    </div>`;
+  }
+  // плитка-заглушка (partial — MTD ещё не готов)
+  function kpiPending(name, icon){
+    return `<div class="bg-white rounded-xl border border-dashed border-neutral-300 p-4 flex flex-col">
+      <div class="text-[12.5px] text-neutral-600 mb-2">${name}</div>
+      <div class="flex items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 mb-1.5"><i data-lucide="${icon}" class="w-[18px] h-[18px] text-neutral-400"></i></div>
+          <div class="text-[13px] font-semibold text-neutral-400 leading-tight">Дождитесь конца<br>первого месяца</div>
+        </div>
+        <div class="shrink-0 opacity-30">${donut([{val:1,color:'#d4d4d4'}], '', '', 56)}</div>
+      </div>
+    </div>`;
+  }
+
+  // ════════════════ RENDER ════════════════
+  function renderStateSeg(){
+    const opts = [['full','Полные'],['partial','Мало'],['empty','Пусто']];
+    document.getElementById('stateSeg').innerHTML = opts.map(([k,l])=>
+      `<button onclick="setState('${k}')" class="seg-btn text-[10.5px] font-medium px-1.5 py-0.5 rounded border ${k===dataState?'active':'border-neutral-200 text-neutral-500 bg-white hover:border-teal-700'}">${l}</button>`
+    ).join('');
+  }
+  function renderPeriodSeg(){
+    const locked = dataState !== 'full';
+    document.getElementById('periodSeg').innerHTML = PERIOD_ORDER.map(([k,l])=>
+      `<button ${locked?'disabled':`onclick="setPeriod('${k}')"`} class="seg-btn text-[12.5px] font-medium px-3 py-1.5 rounded-md border ${k===period&&!locked?'active':'border-neutral-200 text-neutral-600 bg-white'} ${locked?'opacity-40 cursor-not-allowed':'hover:border-teal-700'}">${l}</button>`
+    ).join('');
+  }
+
+  function render(){
+    renderStateSeg();
+    renderPeriodSeg();
+
+    const dash = document.getElementById('dashboard');
+    const empty = document.getElementById('emptyState');
+    const banner = document.getElementById('partialBanner');
+
+    if (dataState === 'empty'){
+      dash.classList.add('hidden');
+      empty.classList.remove('hidden');
+      banner.classList.add('hidden');
+      document.getElementById('periodSub').textContent = 'Период недоступен — мало данных';
+      lucide.createIcons();
+      return;
+    }
+    empty.classList.add('hidden');
+    dash.classList.remove('hidden');
+    banner.classList.toggle('hidden', dataState !== 'partial');
+
+    const d = DATA[period];
+    document.getElementById('periodSub').textContent = `${d.label} · ${d.sub}`;
+
+    // ── KPI ──
+    const nightsAvail = OBJ_COUNT * d.days;
+    const nightsSold = Math.round(nightsAvail * d.occ / 100);
+    const adr = Math.round((d.revenue - d.surcharge) / Math.max(1, nightsSold));
+    const perObj = Math.round(d.revenue / OBJ_COUNT);
+
+    const upPct = (d.surcharge / Math.max(1, d.revenue) * 100).toFixed(1).replace(/\.0$/,'').replace('.',',');
+    const revTile = (dataState === 'partial')
+      ? kpiPending('Выручка', 'wallet')
+      : kpiTile({
+          key:'revenue', active: metric==='revenue',
+          name:'Выручка', icon:'wallet',
+          delta: delta(d.revenue, d.prevRevenue),
+          value: rub(d.revenue),
+          sub: `всё за ${d.sub}`,
+          donut: donut([{val:1,color:'#10b981'}], '', '', 52),
+        });
+
+    // допродажи — отдельная плитка-показатель (ранний заезд / поздний выезд), не внутри выручки
+    const upTile = kpiTile({
+      key:'surcharge', active: metric==='surcharge',
+      name:'Допродажи', icon:'shopping-bag',
+      delta: delta(d.surcharge, d.prevSurcharge),
+      value: rub(d.surcharge),
+      subCls:'text-emerald-600 font-medium',
+      sub: `${d.ai.upN} ${plural(d.ai.upN,'продажа','продажи','продаж')} · ${upPct}% выручки`,
+      donut: donut([{val:d.surcharge,color:'#f59e0b'},{val:Math.max(1,d.revenue-d.surcharge),color:'#e5e5e5'}], Math.round(d.surcharge/Math.max(1,d.revenue)*100)+'%', '', 52),
+    });
+
+    const kpis = [
+      revTile,
+      upTile,
+      kpiTile({
+        key:'occupancy', active: metric==='occupancy',
+        name:'Загрузка', icon:'bar-chart-3',
+        delta: delta(d.occ, d.prevOcc),
+        value: d.occ + '%',
+        sub: `${fmt(nightsSold)} из ${fmt(nightsAvail)} ночей`,
+        donut: donut([{val:d.occ,color:'#3b82f6'},{val:100-d.occ,color:'#e5e5e5'}], d.occ+'%', '', 52),
+      }),
+      kpiTile({
+        key:'ai', active: metric==='ai',
+        name:'AI отвечает сам', icon:'sparkles',
+        delta: delta(d.ai.self, d.prevAiSelf),
+        value: d.ai.self + '%',
+        sub: `${d.ai.esc} ${plural(d.ai.esc,'диалог','диалога','диалогов')} передал вам`,
+        donut: donut([{val:d.ai.self,color:'#14b8a6'},{val:100-d.ai.self,color:'#fca5a5'}], d.ai.self+'%', '', 52),
+      }),
+      kpiTile({
+        key:'bookings', active: metric==='bookings',
+        name:'Брони за период', icon:'calendar-check',
+        delta: delta(d.bookings, d.prevBookings),
+        value: fmt(d.bookings),
+        sub: `${Math.round(d.bookings*0.08)} прямых, остальное с площадок`,
+        donut: donut(CHAN.map(c=>({val:c.share,color:c.color})), fmt(d.bookings), '', 52),
+      }),
+    ];
+    document.getElementById('kpiRow').innerHTML = kpis.join('');
+
+    renderDetail(d, { nightsAvail, nightsSold, adr });
+    lucide.createIcons();
+  }
+
+  // ════════════════ ДЕТАЛИЗАЦИЯ ВЫБРАННОЙ МЕТРИКИ ════════════════
+  const avg = (a) => a.reduce((s,x)=>s+x,0) / Math.max(1,a.length);
+  function renderDetail(d, ctx){
+    const el = document.getElementById('detail');
+    let html = '';
+
+    if (metric === 'revenue'){
+      // в partial выручка за текущий месяц ещё не финальна — честно предупреждаем
+      const notice = dataState === 'partial'
+        ? `<div class="mb-3 flex items-start gap-2 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i data-lucide="hourglass" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600"></i>Текущий месяц ещё не закрыт — итоговая выручка появится в конце месяца. Ниже — то, что уже накопилось.</div>`
+        : '';
+      const legend = `<span class="text-[11.5px] text-neutral-400 inline-flex items-center gap-2.5">
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-[2px] bg-teal-700 inline-block rounded"></span>Выручка</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-[2px] border-t-2 border-dashed border-emerald-500 inline-block"></span>Допродажи</span></span>`;
+      html += secCard('Выручка по времени', 'wallet', notice + `<div class="w-full overflow-hidden">${lineChart(d.series)}</div>`, legend);
+      html += `<div class="mt-4">` + miniCards([
+        { l:'Средняя цена ночи', v:fmt(ctx.adr)+' ₽', ic:'tag' },
+        { l:'Продано ночей', v:fmt(ctx.nightsSold), ic:'moon' },
+        { l:'Средний чек брони', v:rub(Math.round(d.revenue/Math.max(1,d.bookings))), ic:'receipt' },
+        { l:'Средняя длина брони', v:d.los.toString().replace('.',',')+' ноч.', ic:'calendar-range' },
+      ]) + `</div>`;
+      const topItems = TOPOBJ.map(o=>({ label:o.name, value:Math.round(d.revenue*o.s), color:'#0f766e' }));
+      const chanItems = CHAN.map(c=>({ label:c.name, value:Math.round(d.revenue*c.share), color:c.color }));
+      html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        ${secCard('Топ объектов по выручке', 'building-2', barsH(topItems, rub))}
+        ${secCard('Выручка по каналам', 'split', barsH(chanItems, rub))}
+      </div>`;
+    }
+
+    else if (metric === 'surcharge'){
+      const sSeries = d.series.map(p=>({ l:p.l, v:p.s }));
+      const convUp = Math.round(d.ai.upN / Math.max(1,d.bookings) * 100);
+      html += secCard('Допродажи по времени', 'shopping-bag', `<div class="w-full overflow-hidden">${lineChartSingle(sSeries, '#10b981', rubAxis)}</div>`);
+      html += `<div class="mt-4">` + miniCards([
+        { l:'Всего допродаж', v:rub(d.surcharge), ic:'banknote', accent:true },
+        { l:'Количество', v:fmt(d.ai.upN)+' шт', ic:'hash' },
+        { l:'Средний чек допродажи', v:rub(Math.round(d.surcharge/Math.max(1,d.ai.upN))), ic:'receipt' },
+        { l:'Броней с допродажей', v:convUp+'%', ic:'percent' },
+      ]) + `</div>`;
+      const types = [
+        { label:'Поздний выезд', value:Math.round(d.surcharge*0.42), color:'#10b981' },
+        { label:'Ранний заезд', value:Math.round(d.surcharge*0.38), color:'#0d9488' },
+        { label:'Доп. услуги (трансфер, уборка)', value:Math.round(d.surcharge*0.20), color:'#5eead4' },
+      ];
+      const upObj = TOPOBJ.map(o=>({ label:o.name, value:Math.round(d.surcharge*o.s), color:'#10b981' }));
+      html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        ${secCard('По типам допродаж', 'layers', barsH(types, rub))}
+        ${secCard('Топ объектов по допродажам', 'building-2', barsH(upObj, rub))}
+      </div>`;
+    }
+
+    else if (metric === 'occupancy'){
+      const oSeries = d.series.map(p=>({ l:p.l, v:clamp(Math.round(d.occ * p.r / avg(d.series.map(x=>x.r)))) }));
+      const occItems = OCCOFFSET.map(o=>{ const p=clamp(d.occ+o.d); return { label:o.name, value:p, color: p>=75?'#0f766e':p>=50?'#0d9488':'#5eead4' }; }).sort((a,b)=>b.value-a.value);
+      const fwd = [
+        { label:'+1 неделя', value:clamp(d.occ-2), color:'#0f766e' },
+        { label:'+2 недели', value:clamp(d.occ-11), color:'#0d9488' },
+        { label:'+3 недели', value:clamp(d.occ-20), color:'#14b8a6' },
+        { label:'+4 недели', value:clamp(d.occ-33), color:'#5eead4' },
+      ];
+      html += secCard('Загрузка по времени', 'bar-chart-3', `<div class="w-full overflow-hidden">${lineChartSingle(oSeries, '#0f766e', (t)=>Math.round(t)+'%', 100)}</div>`);
+      html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        ${secCard('Занято / свободно', 'pie-chart', `<div class="flex items-center gap-4">
+          <div class="shrink-0">${donut([{val:d.occ,color:'#3b82f6'},{val:100-d.occ,color:'#e5e5e5'}], d.occ+'%', 'загрузка', 96)}</div>
+          <div class="text-[12.5px] text-neutral-600 space-y-1.5">
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:#3b82f6"></span>Занято <b class="text-neutral-800">${fmt(ctx.nightsSold)}</b> ночей</div>
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-neutral-200"></span>Свободно <b class="text-neutral-800">${fmt(ctx.nightsAvail-ctx.nightsSold)}</b> ночей</div>
+            <div class="text-[11.5px] text-neutral-400 pt-0.5">из ${fmt(ctx.nightsAvail)} доступных по ${OBJ_COUNT} объектам</div>
+          </div></div>`)}
+        ${secCard('Загрузка по объектам', 'building-2', barsH(occItems, (v)=>v+'%'))}
+      </div>`;
+      html += `<div class="mt-4">${secCard('Спрос на будущее', 'trending-up', `
+        <div class="text-[12px] text-neutral-500 mb-3">Сколько ночей уже забронировано вперёд. Чем дальше дата — тем больше свободных мест: успеваете поднять цену или запустить акцию.</div>
+        ${barsH(fwd, (v)=>v+'%')}
+        <div class="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-2 text-[12.5px] text-neutral-600"><i data-lucide="clock" class="w-4 h-4 text-teal-600"></i>Гости бронируют в среднем за <b class="text-neutral-800 mono">${d.lead}</b> ${plural(d.lead,'день','дня','дней')} до заезда</div>`, 'прогноз')}</div>`;
+    }
+
+    else if (metric === 'ai'){
+      const aiSeries = d.series.map(p=>({ l:p.l, v:clamp(Math.round(d.ai.self + (p.r/avg(d.series.map(x=>x.r))-1)*3)) }));
+      html += secCard('AI отвечает сам — по времени', 'sparkles', `<div class="w-full overflow-hidden">${lineChartSingle(aiSeries, '#0f766e', (t)=>Math.round(t)+'%', 100)}</div>`);
+      html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        ${secCard('Сам / передал вам', 'pie-chart', `<div class="flex items-center gap-4">
+          <div class="shrink-0">${donut([{val:d.ai.self,color:'#14b8a6'},{val:100-d.ai.self,color:'#fca5a5'}], d.ai.self+'%', 'сам', 96)}</div>
+          <div class="text-[12.5px] text-neutral-600 space-y-1.5">
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:#14b8a6"></span>AI ответил сам <b class="text-neutral-800">${d.ai.self}%</b></div>
+            <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-300"></span>Передал вам <b class="text-neutral-800">${d.ai.esc}</b> ${plural(d.ai.esc,'раз','раза','раз')}</div>
+            <div class="text-[11.5px] text-neutral-400 pt-0.5">из ${fmt(d.ai.dialogs)} ${plural(d.ai.dialogs,'диалога','диалогов','диалогов')}</div>
+          </div></div>`)}
+        ${secCard('Конверсия диалог → бронь', 'message-square-text', `<div class="flex items-center gap-4">
+          <div class="shrink-0">${donut([{val:d.conv,color:'#10b981'},{val:100-d.conv,color:'#e5e5e5'}], d.conv+'%', '', 96)}</div>
+          <div class="text-[12.5px] text-neutral-600 leading-snug">Из ${fmt(d.ai.dialogs)} диалогов <b class="text-neutral-800">${d.conv}%</b> завершились бронью.
+          <div class="text-[11.5px] text-neutral-400 mt-1.5">Считаем по переписке — обычные PMS этого не видят.</div></div></div>`, 'наша метрика')}
+      </div>`;
+      html += `<div class="mt-4">` + miniCards([
+        { l:'Среднее время ответа', v:d.ai.resp, ic:'timer' },
+        { l:'Сэкономлено времени', v:'≈ '+d.ai.hours+' ч', ic:'clock' },
+        { l:'Допродажи AI', v:fmt(d.ai.upN)+' шт', ic:'shopping-bag' },
+        { l:'Заработано на допродажах', v:rub(d.ai.upR), ic:'banknote', accent:true },
+      ]) + `</div>`;
+    }
+
+    else if (metric === 'bookings'){
+      const bSeries = d.series.map((p,i,arr)=>({ l:p.l, v:Math.round(d.bookings * p.r / arr.reduce((s,x)=>s+x.r,0)) }));
+      const chanItems = CHAN.map(c=>({ label:`${c.name} · ${Math.round(c.share*d.bookings)} ${plural(Math.round(c.share*d.bookings),'бронь','брони','броней')}`, value:Math.round(d.revenue*c.share), color:c.color }));
+      const directShare = 8, otaShare = 92;
+      html += secCard('Брони по времени', 'calendar-check', `<div class="w-full overflow-hidden">${lineChartSingle(bSeries, '#0f766e', (t)=>Math.round(t))}</div>`);
+      html += `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        ${secCard('Каналы броней', 'split', `<div class="flex items-center gap-4">
+          <div class="shrink-0">${donut(CHAN.map(c=>({val:c.share,color:c.color})), fmt(d.bookings), 'броней', 110)}</div>
+          <div class="space-y-1 text-[12px] text-neutral-600">${CHAN.map(c=>`<div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${c.color}"></span>${c.name} <b class="text-neutral-800 ml-auto">${Math.round(c.share*100)}%</b></div>`).join('')}</div>
+        </div>`)}
+        ${secCard('Выручка по каналам', 'banknote', barsH(chanItems, rub))}
+      </div>`;
+      html += `<div class="mt-4">` + miniCards([
+        { l:'Прямые брони', v:directShare+'%', ic:'link' },
+        { l:'С площадок (OTA)', v:otaShare+'%', ic:'globe' },
+        { l:'Повторные гости', v:d.repeat+'%', ic:'repeat' },
+        { l:'Отмен', v:d.cancel+'%', ic:'x-circle' },
+      ]) + `</div>`;
+      html += `<div class="mt-4">${secCard('Окно бронирования', 'clock', `<div class="flex items-center gap-2 text-[12.5px] text-neutral-600"><i data-lucide="calendar-clock" class="w-4 h-4 text-teal-600"></i>Гости бронируют в среднем за <b class="text-neutral-800 mono">${d.lead}</b> ${plural(d.lead,'день','дня','дней')} до заезда. Отмены — <b class="text-neutral-800 mono">${d.cancel}%</b> броней.</div>`)}</div>`;
+    }
+
+    el.innerHTML = html;
+  }
+
+  function setMetric(k){ metric = k; render(); }
+  function setPeriod(k){ period = k; render(); }
+  function setState(s){ dataState = s; if (s !== 'full') period = 'current'; if (s === 'partial' && metric === 'revenue') metric = 'occupancy'; render(); }
+
+  function plural(n, one, few, many){
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+
+  // ── sidebar / drawer / support / toast (наследовано из B5) ──
+  function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer(){ document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer(){ document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport(){ document.getElementById('supportMenu').classList.toggle('hidden'); }
+  document.addEventListener('click', (e) => { if (!e.target.closest('#supportMenu') && !e.target.closest('button[onclick*="toggleSupport"]')) document.getElementById('supportMenu').classList.add('hidden'); });
+  function toast(msg, type){
+    const icons={success:['check-circle','#34d399'],warn:['alert-triangle','#fbbf24'],error:['alert-circle','#f87171'],info:['info','#5eead4']};
+    const [ic,col]=icons[type]||icons.info;
+    const el=document.getElementById('toast');
+    el.innerHTML=`<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt=setTimeout(()=>el.classList.add('hidden'),1900);
+  }
+  function goScreen(key){ try{ if(window.top&&window.top!==window){window.top.location.hash=key;} else {toast('Переход → '+key,'info');} }catch(e){ toast('Переход → '+key,'info'); } }
+
+  // init
+  render();
+  lucide.createIcons();
+</script>
+</body>
+</html>

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Журнал</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* строка лога: «таймлайн-точка» через левую границу-направляющую */
+  .log-row { transition: background .12s ease; }
+  .log-row:hover { background: #fafaf9; }
+
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    .a-input { font-size: 16px !important; }
+    /* колонки времени/кто скрываем — переносим внутрь ячейки события */
+    .col-time-desktop, .col-who-desktop { display: none !important; }
+  }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Журналы</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <div class="relative">
+          <button onclick="toggleProfile()" class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+            <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+            <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="profileMenu" class="hidden absolute right-0 top-full mt-1.5 w-64 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="flex items-center gap-3 px-4 py-3.5 bg-teal-50/60 border-b border-neutral-100">
+              <div class="w-10 h-10 rounded-full bg-teal-700 grid place-items-center text-[15px] font-semibold text-white shrink-0">М</div>
+              <div class="min-w-0">
+                <div class="text-[14px] font-semibold text-neutral-900 truncate">Михаил</div>
+                <div class="text-[12px] text-teal-700 mono truncate">mikhail@bronist.ru</div>
+              </div>
+            </div>
+            <button onclick="toast('Мой профиль'); toggleProfile()" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 text-[13px] font-medium text-neutral-700"><i data-lucide="user" class="w-[18px] h-[18px] text-teal-600"></i> Мой профиль</button>
+            <button onclick="toast('Выход из аккаунта')" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-[13px] font-semibold text-red-600 border-t border-neutral-100"><i data-lucide="log-out" class="w-[18px] h-[18px] text-red-500"></i> Выйти</button>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <!-- шапка раздела + фильтры (sticky) -->
+      <div class="sticky top-0 z-20 bg-white border-b border-neutral-200">
+        <div class="content-pad max-w-[1180px] mx-auto px-6 pt-4 pb-3">
+          <div class="flex items-start gap-3 flex-wrap">
+            <div class="min-w-0 flex-1">
+              <h1 class="text-[20px] font-bold tracking-tight">Журнал</h1>
+              <p class="text-[13px] text-neutral-500">Единая история событий: замки, брони, персонал и переписка с гостями.</p>
+            </div>
+            <button onclick="toast('Экспорт журнала в CSV — в реализации')" class="shrink-0 inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="download" class="w-4 h-4"></i> Экспорт</button>
+          </div>
+
+          <!-- строка фильтров -->
+          <div class="mt-3 flex flex-col gap-2.5">
+            <!-- поиск + селекты -->
+            <div class="flex flex-col sm:flex-row gap-2">
+              <div class="relative flex-1 min-w-0">
+                <i data-lucide="search" class="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input id="q" oninput="setQuery(this.value)" placeholder="Поиск: гость, код, бронь, объект…" class="a-input w-full rounded-md border border-neutral-200 pl-9 pr-3 py-2 text-[13px] focus:outline-none focus:border-teal-700" />
+              </div>
+              <select id="objSel" onchange="setObj(this.value)" class="a-input rounded-md border border-neutral-200 bg-white px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700 shrink-0"></select>
+              <select id="perSel" onchange="setPeriod(this.value)" class="a-input rounded-md border border-neutral-200 bg-white px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700 shrink-0">
+                <option value="today">Сегодня</option>
+                <option value="7d" selected>7 дней</option>
+                <option value="30d">30 дней</option>
+                <option value="all">Всё время</option>
+              </select>
+            </div>
+            <!-- chip-фильтр по типу -->
+            <div id="typeChips" class="flex items-center gap-1.5 flex-wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- лента лога -->
+      <div class="content-pad max-w-[1180px] mx-auto px-6 py-5 w-full">
+        <div class="flex items-center justify-between mb-2.5">
+          <div id="counter" class="text-[12px] text-neutral-400"></div>
+        </div>
+        <div id="logWrap"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- демо-свитчер состояний (только для мокапа) -->
+<div class="fixed left-3 bottom-3 z-[70] bg-neutral-900 text-white rounded-lg shadow-lg flex items-center gap-1 p-1 text-[11.5px] desktop-only">
+  <span class="px-2 text-neutral-400">Демо:</span>
+  <button onclick="setDemo('normal')" id="demo-normal" class="px-2.5 py-1 rounded-md bg-white text-neutral-900 font-medium">Норма</button>
+  <button onclick="setDemo('empty')" id="demo-empty" class="px-2.5 py-1 rounded-md text-neutral-300 font-medium">Пусто</button>
+</div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Журнал активен) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Брони' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика' },
+    { icon:'scroll-text', label:'Журнал', active:true },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] font-medium ${n.active?'bg-teal-700 text-white':'text-neutral-700 hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active?'text-white/40':'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-700 text-white">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ════════════════════ СПРАВОЧНИКИ ════════════════════
+  const OBJECTS = [
+    { id:1, name:'Тверская 15' },
+    { id:2, name:'Арбат 4' },
+    { id:3, name:'Невский 28' },
+    { id:4, name:'Апартаменты «Уют»' },
+    { id:5, name:'Студия на Мойке' },
+    { id:6, name:'Лофт Красный Октябрь' },
+  ];
+  const objName = (id) => (OBJECTS.find((o) => o.id === id) || {}).name || '—';
+
+  // ── ДВЕ ОСИ (намеренно разведены) ──
+  // 1) severity — ЦВЕТ иконки-аватара = насколько хосту надо реагировать.
+  //    Единственный цветовой язык на экране: глаз цепляется за цветную иконку, рутина серая.
+  //    Без заливки/полосы строки — выделяем только саму иконку (решение Михаила 2026-06-04).
+  const SEV = {
+    info:    { dot:'bg-neutral-100 text-neutral-500' },  // рутина: просто произошло
+    success: { dot:'bg-emerald-50 text-emerald-600' },   // сработало / деньги / код гостя
+    warning: { dot:'bg-amber-50 text-amber-500' },       // нужно внимание (янтарный)
+    danger:  { dot:'bg-red-50 text-red-600' },           // проблема, чинить
+    staff:   { dot:'bg-orange-50 text-orange-600' },     // персонал на объекте (оранжевый акцент)
+  };
+  // 2) категория — НЕЙТРАЛЬНЫЙ бейдж справа (не конкурирует с severity-цветом).
+  const CAT = {
+    locks:   { label:'Замки',       icon:'lock' },
+    booking: { label:'Брони',       icon:'calendar' },
+    staff:   { label:'Персонал',    icon:'hard-hat' },
+    comms:   { label:'Каналы и AI', icon:'message-circle' },
+  };
+
+  // chip-фильтр (порядок) — фильтруем по категории
+  const TYPE_ORDER = ['all','locks','booking','staff','comms'];
+
+  // ════════════════════ ДАННЫЕ (демо) ════════════════════
+  // day: 0 = сегодня, 1 = вчера, 2 = позавчера …
+  // link: куда ведёт клик (демо-toast)
+  // type = категория (бейдж), sev = severity (ЦВЕТ иконки): info | success | warning | danger | staff
+  // staff = персонал на объекте (оранжевый акцент, переопределяет severity — хост видит присутствие сразу).
+  // Формулировки выверены по реальному набору событий замка из RentyRoom (скрин Михаила 2026-06-04).
+  const EVENTS = [
+    // — Сегодня —
+    { day:0, time:'14:45', type:'locks',   sev:'danger',  obj:3, icon:'shield-x',      title:'Замок заблокирован · попытка подбора кода', who:'Система',             link:'Открываю объект «Невский 28» → Замки' },
+    { day:0, time:'14:44', type:'locks',   sev:'warning', obj:3, icon:'key-round',     title:'Введён неверный код 5 раз · 58925',        who:'Гость',                link:'Открываю объект «Невский 28» → Замки' },
+    { day:0, time:'13:20', type:'booking', sev:'success', obj:2, icon:'log-in',        title:'Гость Алексей заехал · код сработал',      who:'Гость · Алексей',      link:'Открываю бронь AV-148210' },
+    { day:0, time:'11:30', type:'locks',   sev:'success', obj:2, icon:'key-round',     title:'Код доступа создан в замке · 4821',        who:'Система',              link:'Открываю объект «Арбат 4» → Замки' },
+    { day:0, time:'10:05', type:'staff',   sev:'staff',   obj:1, icon:'hard-hat',      title:'Сотрудник Дилфуза открыл дверь',           who:'Дилфуза · горничная',  link:'Открываю объект «Тверская 15» → Замки' },
+    { day:0, time:'09:00', type:'staff',   sev:'staff',   obj:2, icon:'sparkles',      title:'Завершена уборка',                         who:'Гульнара · горничная', link:'Открываю объект «Арбат 4»' },
+    { day:0, time:'08:15', type:'booking', sev:'info',    obj:4, icon:'info',          title:'Создано проживание из RealtyCalendar',     who:'RealtyCalendar',       link:'Открываю бронь RC-1859' },
+    // — Вчера —
+    { day:1, time:'21:05', type:'comms',   sev:'success', obj:3, icon:'wallet',        title:'Допродажа оплачена · поздний выезд +800 ₽', who:'Гость · Ольга С.',    link:'Открываю бронь OZ-90233' },
+    { day:1, time:'18:42', type:'locks',   sev:'success', obj:5, icon:'wifi',          title:'Связь с замком восстановлена · ключ загружен', who:'Система',          link:'Открываю объект «Студия на Мойке» → Замки' },
+    { day:1, time:'18:40', type:'locks',   sev:'warning', obj:5, icon:'wifi-off',      title:'Не удалось загрузить ключ · нет связи с замком', who:'Система',         link:'Открываю объект «Студия на Мойке» → Замки' },
+    { day:1, time:'16:55', type:'comms',   sev:'warning', obj:4, icon:'flag',          title:'AI эскалировал вопрос вам · спор по депозиту', who:'AI-бронист',       link:'Открываю чат с гостем' },
+    { day:1, time:'12:00', type:'booking', sev:'info',    obj:1, icon:'log-out',       title:'Гость завершил проживание',                who:'Гость · Пётр В.',      link:'Открываю бронь AV-147001' },
+    { day:1, time:'10:15', type:'comms',   sev:'info',    obj:1, icon:'send',          title:'Приветствие отправлено гостю в MAX',       who:'AI-бронист',           link:'Открываю чат с гостем' },
+    // — Позавчера —
+    { day:2, time:'19:40', type:'locks',   sev:'warning', obj:5, icon:'battery-low',   title:'Низкий заряд замка · 18%',                 who:'Система',              link:'Открываю объект «Студия на Мойке» → Замки' },
+    { day:2, time:'15:31', type:'locks',   sev:'info',    obj:6, icon:'wifi',          title:'Wi-Fi шлюз снова на связи',                who:'Система',              link:'Открываю объект «Лофт Красный Октябрь» → Замки' },
+    { day:2, time:'15:30', type:'locks',   sev:'info',    obj:6, icon:'wifi-off',      title:'Wi-Fi шлюз потерял связь · переподключение', who:'Система',            link:'Открываю объект «Лофт Красный Октябрь» → Замки' },
+    { day:2, time:'14:25', type:'booking', sev:'success', obj:6, icon:'calendar-plus', title:'Новая бронь загружена с Авито',            who:'Авито',                link:'Открываю бронь AV-148990' },
+    { day:2, time:'08:00', type:'staff',   sev:'staff',   obj:1, icon:'hard-hat',      title:'Сотрудник открыл дверь · служебный код',   who:'Иван · мастер',        link:'Открываю объект «Тверская 15» → Замки' },
+  ];
+
+  const DAY_LABEL = ['Сегодня', 'Вчера', 'Позавчера'];
+  const DAY_DATE  = ['4 июня', '3 июня', '2 июня'];
+
+  // ════════════════════ ФИЛЬТРЫ + РЕНДЕР ════════════════════
+  let f = { type:'all', obj:'all', q:'', period:'7d' };
+  let demo = 'normal';
+
+  // селект объектов
+  document.getElementById('objSel').innerHTML =
+    `<option value="all">Все объекты</option>` + OBJECTS.map((o) => `<option value="${o.id}">${escapeHtml(o.name)}</option>`).join('');
+
+  function renderChips() {
+    document.getElementById('typeChips').innerHTML = TYPE_ORDER.map((t) => {
+      const active = f.type === t;
+      const lbl = t === 'all' ? 'Все' : CAT[t].label;
+      const ic = t === 'all' ? 'list' : CAT[t].icon;
+      return `<button onclick="setType('${t}')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-2.5 py-1.5 rounded-full border ${active?'bg-teal-700 border-teal-700 text-white':'bg-white border-neutral-200 text-neutral-600 hover:border-teal-700'}">
+        <i data-lucide="${ic}" class="w-3.5 h-3.5"></i> ${lbl}</button>`;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  function periodMaxDay() { return f.period === 'today' ? 0 : 99; } // 7d/30d/all — все демо-дни попадают
+
+  function filtered() {
+    if (demo === 'empty') return [];
+    const q = f.q.trim().toLowerCase();
+    const maxDay = periodMaxDay();
+    return EVENTS.filter((e) => {
+      if (f.type !== 'all' && e.type !== f.type) return false;
+      if (f.obj !== 'all' && e.obj !== Number(f.obj)) return false;
+      if (e.day > maxDay) return false;
+      if (q) {
+        const hay = (e.title + ' ' + e.who + ' ' + objName(e.obj)).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderLog() {
+    const list = filtered();
+    const wrap = document.getElementById('logWrap');
+    const counter = document.getElementById('counter');
+
+    if (list.length === 0) {
+      counter.textContent = '';
+      const cleared = (f.type !== 'all' || f.obj !== 'all' || f.q || f.period === 'today') && demo !== 'empty';
+      wrap.innerHTML = `
+        <div class="bg-white rounded-xl border border-neutral-200 py-14 px-6 flex flex-col items-center text-center">
+          <div class="w-14 h-14 rounded-2xl bg-neutral-100 grid place-items-center mb-3"><i data-lucide="${cleared?'search-x':'scroll-text'}" class="w-7 h-7 text-neutral-400"></i></div>
+          <div class="text-[15px] font-semibold text-neutral-700">${cleared ? 'Ничего не найдено' : 'Здесь будет история событий'}</div>
+          <p class="text-[13px] text-neutral-500 mt-1 max-w-sm">${cleared
+            ? 'Под текущие фильтры событий нет. Попробуйте сбросить их или расширить период.'
+            : 'Как только пойдут брони, открытия замков и переписка с гостями — все события появятся здесь с поиском и фильтрами.'}</p>
+          ${cleared ? `<button onclick="resetFilters()" class="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Сбросить фильтры</button>` : ''}
+        </div>`;
+      lucide.createIcons();
+      return;
+    }
+
+    counter.textContent = `${list.length} ${plural(list.length, 'событие','события','событий')}`;
+
+    // группировка по дням
+    const byDay = {};
+    list.forEach((e) => { (byDay[e.day] ??= []).push(e); });
+    const days = Object.keys(byDay).map(Number).sort((a,b)=>a-b);
+
+    wrap.innerHTML = days.map((d) => {
+      const rows = byDay[d].map((e) => {
+        const s = SEV[e.sev] || SEV.info;
+        const c = CAT[e.type];
+        return `
+        <div class="log-row flex items-center gap-3 px-3.5 py-3 border-t border-neutral-100 cursor-pointer" onclick="toast('${escapeHtml(e.link)}')">
+          <span class="col-time-desktop mono text-[12px] text-neutral-400 w-12 shrink-0 text-right">${e.time}</span>
+          <span class="w-9 h-9 rounded-lg ${s.dot} grid place-items-center shrink-0"><i data-lucide="${e.icon}" class="w-[18px] h-[18px]"></i></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13.5px] font-medium text-neutral-800 truncate">${escapeHtml(e.title)}</div>
+            <div class="text-[12px] text-neutral-500 flex items-center gap-1.5 flex-wrap">
+              <span class="mono text-[11px] text-neutral-400 sm:hidden">${e.time}</span>
+              <span class="sm:hidden text-neutral-300">·</span>
+              <i data-lucide="building-2" class="w-3 h-3 text-neutral-400"></i><span class="truncate">${escapeHtml(objName(e.obj))}</span>
+              <span class="col-who-desktop text-neutral-300">·</span>
+              <span class="col-who-desktop truncate">${escapeHtml(e.who)}</span>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1 text-[10.5px] font-medium px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-500 shrink-0"><i data-lucide="${c.icon}" class="w-3 h-3"></i> ${c.label}</span>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-neutral-300 shrink-0 hidden sm:block"></i>
+        </div>`;
+      }).join('');
+      return `
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-1.5 px-0.5">
+            <span class="text-[12px] font-semibold text-neutral-600">${DAY_LABEL[d] || DAY_DATE[d]}</span>
+            <span class="text-[11.5px] text-neutral-400 mono">${DAY_DATE[d] || ''}</span>
+          </div>
+          <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+            <div class="-mt-px">${rows}</div>
+          </div>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+
+  // ── обработчики фильтров ──
+  function setType(t) { f.type = t; renderChips(); renderLog(); }
+  function setObj(v) { f.obj = v; renderLog(); }
+  function setPeriod(v) { f.period = v; renderLog(); }
+  function setQuery(v) { f.q = v; renderLog(); }
+  function resetFilters() {
+    f = { type:'all', obj:'all', q:'', period:'7d' };
+    document.getElementById('q').value = '';
+    document.getElementById('objSel').value = 'all';
+    document.getElementById('perSel').value = '7d';
+    renderChips(); renderLog();
+  }
+  function setDemo(m) {
+    demo = m;
+    document.getElementById('demo-normal').className = 'px-2.5 py-1 rounded-md font-medium ' + (m==='normal'?'bg-white text-neutral-900':'text-neutral-300');
+    document.getElementById('demo-empty').className = 'px-2.5 py-1 rounded-md font-medium ' + (m==='empty'?'bg-white text-neutral-900':'text-neutral-300');
+    renderLog();
+  }
+
+  // ════════════════════ ОБЩЕЕ ════════════════════
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer() { document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer() { document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleProfile() { document.getElementById('profileMenu').classList.toggle('hidden'); }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#profileMenu') && !e.target.closest('button[onclick*="toggleProfile"]')) document.getElementById('profileMenu').classList.add('hidden');
+  });
+  function toast(msg, type){
+    const icons={success:['check-circle','#34d399'],warn:['alert-triangle','#fbbf24'],error:['alert-circle','#f87171'],info:['info','#5eead4']};
+    const [ic,col]=icons[type]||icons.info;
+    const el=document.getElementById('toast');
+    el.innerHTML=`<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt=setTimeout(()=>el.classList.add('hidden'),1900);
+  }
+  function goScreen(key){ try{ if(window.top&&window.top!==window){window.top.location.hash=key;} else {toast('Переход → '+key,'info');} }catch(e){ toast('Переход → '+key,'info'); } }
+
+  // init
+  renderChips();
+  renderLog();
+  lucide.createIcons();
+</script>
+</body>
+</html>

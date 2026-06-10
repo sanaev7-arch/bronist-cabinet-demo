@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Чаты</title>
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  /* сворачивание боковых колонок Чатов (как Slack/Gmail) */
+  .chat-wrap.hide-list   #colList { display: none; }
+  #colCard { transition: width .2s ease, opacity .2s ease; }
+  .chat-wrap.hide-card   #colCard { width: 0 !important; min-width: 0 !important; opacity: 0; overflow: hidden; border-left: 0 !important; }
+  /* действия с сообщением (ответить / копировать / редактировать) — всегда видны (desktop + mobile) */
+  .msg-actions { opacity: 1; pointer-events: auto; transition: opacity .15s; }
+  @media (hover: none) {
+    /* на тач — крупнее */
+    .msg-actions button { width: 38px !important; height: 38px !important; }
+    .msg-actions button svg { width: 20px !important; height: 20px !important; }
+  }
+
+  .mobile-only { display: none !important; }
+
+  /* активная строка диалога в списке */
+  .dlg-row.active { background:#ecfdf5; border-color:#6ee7b7; }  /* #16: приглушённый emerald-эталон (как Каналы автоматизации), не кричащий teal */
+
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+
+    /* Mobile Чаты: показываем ОДНУ панель. По умолчанию — список. */
+    #colList { width: 100% !important; border-right: 0 !important; }
+    #colCard { position: fixed; top: 0; right: 0; bottom: 0; width: 86% !important; max-width: 340px; z-index: 58; box-shadow: -4px 0 24px rgba(0,0,0,0.18); transform: translateX(100%); transition: transform 200ms ease; border-left: 0 !important; }
+    .chat-wrap.card-open #colCard { transform: translateX(0); }
+    /* в режиме «список» прячем диалог; в режиме «диалог» прячем список */
+    .chat-wrap:not(.m-dialog) #colDialog { display: none !important; }
+    .chat-wrap.m-dialog #colList { display: none !important; }
+    .m-back { display: inline-flex !important; }
+    /* корень на dvh — клавиатура iOS не расползает вёрстку */
+    .root-shell { height: 100dvh !important; }
+    /* 16px на всех редактируемых полях — iOS Safari иначе зумит при фокусе и смещает экран вправо */
+    .composer-input { font-size: 16px !important; }
+    #suggestText { font-size: 16px !important; }
+    /* кнопки эскалации: полноширинный ровный стек */
+    .esc-actions { display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important; }
+    .esc-actions button { width: 100% !important; height: 44px !important; }
+  }
+  .m-back { display: none; }
+  .composer-input { font-size: 13px; }
+  .esc-actions button { height: 36px; }
+  /* редактируемая сугестия */
+  #suggestText:hover { border-color: #2dd4bf; }
+  #suggestText:focus { outline: none; border-color: #0f766e; }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5; название экрана — Чаты) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Чаты</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE: 3 колонки, full-height, независимый скролл -->
+    <div id="chatWrap" class="chat-wrap flex-1 flex min-h-0 bg-white">
+
+      <!-- КОЛОНКА 1 — СПИСОК -->
+      <section id="colList" class="w-[320px] shrink-0 border-r border-neutral-200 flex flex-col min-h-0">
+        <!-- поиск + фильтры -->
+        <div class="px-3 pt-3 pb-2 border-b border-neutral-200 space-y-2.5">
+          <div class="flex items-center gap-2 h-9 px-3 rounded-lg border border-neutral-200 bg-neutral-50 text-[13px]">
+            <i data-lucide="search" class="w-4 h-4 text-neutral-400"></i>
+            <span class="text-neutral-400">Поиск по гостю, объекту, броне…</span>
+          </div>
+          <div id="filters" class="flex items-center gap-1.5 flex-wrap"></div>
+        </div>
+        <div id="dlgList" class="flex-1 overflow-y-auto"></div>
+      </section>
+
+      <!-- КОЛОНКА 2 — ДИАЛОГ -->
+      <section id="colDialog" class="flex-1 flex flex-col min-h-0 min-w-0">
+        <!-- шапка диалога -->
+        <div class="h-14 shrink-0 border-b border-neutral-200 flex items-center gap-2.5 px-4">
+          <button onclick="mBack()" class="m-back m-back w-8 h-8 items-center justify-center rounded-md hover:bg-neutral-100 text-neutral-500"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+          <button onclick="toggleCol('hide-list')" class="desktop-only w-8 h-8 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-400" title="Свернуть список"><i data-lucide="panel-left-close" class="w-[18px] h-[18px]"></i></button>
+          <!-- строка контакта: тап открывает карточку гостя (на mobile) -->
+          <button onclick="toggleGuestCard()" class="flex-1 min-w-0 text-left rounded-md md:cursor-default">
+            <div id="dHeadName" class="text-[14px] font-semibold leading-tight truncate"></div>
+            <div id="dHeadSub" class="text-[12px] text-neutral-500 leading-tight truncate mono"></div>
+          </button>
+          <!-- AI toggle (несжимаемый) -->
+          <div class="flex items-center gap-2 shrink-0">
+            <button onclick="toggleAi()" id="aiToggle" class="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-[12px] font-medium hover:border-emerald-400 shrink-0 whitespace-nowrap">
+              <span id="aiDot" class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+              <span id="aiLabel">AI активен</span>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-60 shrink-0"></i>
+            </button>
+            <button onclick="toggleCol('hide-card')" class="desktop-only w-8 h-8 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-400" title="Свернуть карточку"><i data-lucide="panel-right-close" class="w-[18px] h-[18px]"></i></button>
+          </div>
+        </div>
+        <!-- лента -->
+        <div id="thread" class="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-neutral-50"></div>
+        <!-- зона эскалации (показывается когда AI не уверен) -->
+        <div id="escalation" class="hidden border-t border-amber-200 bg-amber-50/60 px-4 py-3">
+          <div class="flex items-start gap-2.5">
+            <span class="w-7 h-7 rounded-lg bg-amber-100 grid place-items-center shrink-0"><i data-lucide="sparkles" class="w-[16px] h-[16px] text-amber-600"></i></span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[12px] font-semibold text-amber-800">AI не уверен в ответе</span>
+                <span class="inline-flex items-center gap-1 text-[11px] text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> низкая уверенность</span>
+              </div>
+              <div id="suggestText" contenteditable="true" spellcheck="false" class="text-[13px] text-neutral-700 bg-white border border-neutral-200 rounded-lg px-3 py-2 leading-snug cursor-text"></div>
+              <div class="text-[11px] text-neutral-400 mt-1 flex items-center gap-1"><i data-lucide="pencil" class="w-3 h-3"></i> Нажмите на текст, чтобы отредактировать перед отправкой</div>
+              <div class="esc-actions flex items-center gap-2 mt-2.5">
+                <button onclick="approve()" class="inline-flex items-center justify-center gap-1.5 text-[12.5px] font-medium px-3 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> Одобрить и отправить</button>
+                <button onclick="takeover()" class="inline-flex items-center justify-center text-[12.5px] font-medium px-3 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Взять на себя</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- композер -->
+        <div class="shrink-0 border-t border-neutral-200 px-3 py-2.5">
+          <!-- цитата при ответе на сообщение -->
+          <div id="replyBar" class="hidden items-center gap-2 px-3 py-2 mb-2 rounded-md bg-neutral-100 border-l-2 border-teal-600">
+            <i data-lucide="reply" class="w-4 h-4 text-teal-600 shrink-0"></i>
+            <div class="min-w-0 flex-1"><div class="text-[11px] text-teal-700 font-medium">Ответ на сообщение</div><div id="replyText" class="text-[12px] text-neutral-500 truncate"></div></div>
+            <button onclick="cancelReply()" class="w-6 h-6 grid place-items-center rounded hover:bg-neutral-200 text-neutral-400 shrink-0"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+          </div>
+          <div class="flex items-end gap-2">
+            <button class="w-9 h-9 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500" title="Шаблон"><i data-lucide="file-text" class="w-[18px] h-[18px]"></i></button>
+            <button class="w-9 h-9 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500" title="Вложение"><i data-lucide="paperclip" class="w-[18px] h-[18px]"></i></button>
+            <textarea rows="1" placeholder="Написать сообщение…" class="composer-input flex-1 resize-none min-h-[40px] overflow-y-auto rounded-lg border border-neutral-200 px-3 py-2.5 leading-snug focus:outline-none focus:border-teal-700 placeholder:text-neutral-400"></textarea>
+            <button class="w-9 h-9 grid place-items-center rounded-md bg-teal-700 text-white hover:bg-teal-800 shrink-0" title="Отправить"><i data-lucide="send" class="w-[18px] h-[18px]"></i></button>
+          </div>
+          <div id="composerHint" class="text-[11px] text-neutral-400 mt-1.5 pl-11"></div>
+        </div>
+      </section>
+
+      <!-- КОЛОНКА 3 — КАРТОЧКА ГОСТЯ + БРОНЬ -->
+      <aside id="colCard" class="w-[320px] shrink-0 border-l border-neutral-200 flex flex-col min-h-0 bg-white">
+        <div class="h-14 shrink-0 border-b border-neutral-200 flex items-center px-4">
+          <span class="text-[13px] font-semibold text-neutral-700">Карточка гостя</span>
+          <button onclick="closeCard()" class="ml-auto w-8 h-8 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-[18px] h-[18px]"></i></button>
+        </div>
+        <div id="cardBody" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Чаты активны, бейдж непрочитанных) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', active:true, badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Брони' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика' },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  // ── ДАННЫЕ ──
+  // channel: иконка-источник; conf: уверенность последнего AI-ответа (green/yellow/red) либо null
+  // need: требует решения хоста (эскалация)
+  // Канал — категория, не severity: различаем буквой на нейтральном фоне (без радуги violet/sky/green)
+  const CH = {
+    max:   { label:'MAX', cls:'bg-neutral-100 text-neutral-600' },
+    tg:    { label:'TG',  cls:'bg-neutral-100 text-neutral-600' },
+    wa:    { label:'WA',  cls:'bg-neutral-100 text-neutral-600' },
+    web:   { label:'Веб', cls:'bg-neutral-100 text-neutral-600' },
+  };
+  const confDot = { green:'bg-emerald-500', yellow:'bg-amber-500', red:'bg-red-500' };
+
+  const DIALOGS = [
+    { id:'sergey', need:true, guest:'Сергей Котов', obj:'Тверская 15', phone:'+7 999 124-50-30', lang:'RU',
+      channels:['max','tg'], lastCh:'tg', conf:'red', unread:2, time:'1 мин',
+      preview:'А можно заехать в 11 утра? Поезд рано…',
+      dates:'1–5 июн', paid:'24 000 ₽ · оплачено', code:'9500#', codeState:'loaded',
+      past:[{d:'мар 2026', obj:'Тверская 15'}],
+      msgs:[
+        { from:'sys', text:'Бронь создана из Авито · Тверская 15 · 1–5 июн' },
+        { from:'bot', ch:'max', text:'Сергей, здравствуйте! Я помощник по заселению. Ваша страница брони со всеми деталями: bronist.ru/b/9f2k', ai:true, conf:'green', t:'вчера 18:02' },
+        { from:'guest', ch:'max', text:'Спасибо! А где код от замка?', t:'08:14' },
+        { from:'bot', ch:'max', text:'Код от замка — 9500#. Он активен с 14:00 дня заезда. Wi-Fi: сеть RG_Guest, пароль 12345678.', ai:true, conf:'green', t:'08:14' },
+        { from:'guest', ch:'tg', text:'А можно заехать в 11 утра? Поезд рано приходит', t:'08:31' },
+      ],
+      suggest:'Ранний заезд возможен по запросу. Я уточню у хоста, свободна ли квартира с утра, и вернусь с ответом. Если номер свободен — ранний заезд с 11:00 стоит 1 500 ₽.' },
+
+    { id:'anna', need:true, guest:'Анна Лебедева', obj:'Арбат 8', phone:'+7 905 220-11-04', lang:'RU',
+      channels:['max'], lastCh:'max', conf:'red', unread:1, time:'8 мин',
+      preview:'В ванной не работает свет, это ужасно!',
+      dates:'30 мая – 2 июн', paid:'18 600 ₽ · оплачено', code:'3120#', codeState:'loaded',
+      past:[],
+      msgs:[
+        { from:'guest', ch:'max', text:'Здравствуйте, в ванной не работает свет, это ужасно!', t:'08:24' },
+        { from:'bot', ch:'max', text:'Анна, очень жаль, что так вышло. Сейчас разберёмся.', ai:true, conf:'yellow', t:'08:24' },
+      ],
+      suggest:'Приношу извинения за неудобство. Передаю хосту — он свяжется с вами в течение 15 минут и решит вопрос со светом. Если нужно, заменим лампу сегодня.' },
+
+    { id:'maria', need:false, guest:'Мария Морозова', obj:'Тверская 15', phone:'+7 916 700-88-12', lang:'RU',
+      channels:['tg'], lastCh:'tg', conf:'green', unread:0, time:'24 мин',
+      preview:'Поняла, спасибо большое 🙏',
+      dates:'5–9 июн', paid:'ожидает предоплату', code:'—', codeState:'loading',
+      past:[{d:'янв 2026', obj:'Тверская 15'},{d:'окт 2025', obj:'Арбат 8'}],
+      msgs:[
+        { from:'guest', ch:'tg', text:'Добрый день! Подскажите, есть ли парковка?', t:'07:50' },
+        { from:'bot', ch:'tg', text:'Да, во дворе есть бесплатная гостевая парковка, въезд со стороны переулка по коду 7788.', ai:true, conf:'green', t:'07:50' },
+        { from:'guest', ch:'tg', text:'Поняла, спасибо большое 🙏', t:'07:51' },
+      ], suggest:null },
+
+    { id:'igor', need:false, guest:'Игорь Сафин', obj:'Арбат 8', phone:'+7 903 511-72-90', lang:'RU',
+      channels:['web'], lastCh:'web', conf:'green', unread:0, time:'1 ч',
+      preview:'AI отправил инструкцию по заезду',
+      dates:'2–4 июн', paid:'9 200 ₽ · оплачено', code:'6644#', codeState:'loaded',
+      past:[],
+      msgs:[
+        { from:'sys', text:'Плановое сообщение «Инструкция по заезду» отправлено · за день до заезда' },
+        { from:'bot', ch:'web', text:'Игорь, завтра ваш заезд! Адрес: Арбат 8, кв 12. Код подъезда 45В, код замка 6644#. Хорошей дороги!', ai:true, conf:'green', t:'вчера 12:00' },
+      ], suggest:null },
+
+    { id:'dmitry', need:false, guest:'Дмитрий Орлов', obj:'Тверская 15', phone:'+7 921 044-19-55', lang:'EN',
+      channels:['wa'], lastCh:'wa', conf:'green', unread:0, time:'3 ч',
+      preview:'Got it, thank you!',
+      dates:'8–11 июн', paid:'27 000 ₽ · оплачено', code:'8810#', codeState:'loaded',
+      past:[],
+      msgs:[
+        { from:'guest', ch:'wa', text:'Hi! Is early check-in possible?', t:'06:10' },
+        { from:'bot', ch:'wa', text:'Hello Dmitry! Early check-in from 11:00 is available for 1500 ₽ if the apartment is free. Shall I reserve it?', ai:true, conf:'green', t:'06:10' },
+        { from:'guest', ch:'wa', text:'Got it, thank you!', t:'06:12' },
+      ], suggest:null },
+  ];
+
+  // ── ФИЛЬТРЫ ──
+  const FILTERS = [
+    { key:'all', label:'Все' },
+    { key:'need', label:'Требует решения' },
+    { key:'unread', label:'Непрочитанные' },
+    { key:'max', label:'MAX' },
+    { key:'tg', label:'Telegram' },
+  ];
+  let activeFilter = 'all';
+  function renderFilters() {
+    document.getElementById('filters').innerHTML = FILTERS.map((f) => {
+      const on = f.key === activeFilter;
+      const cnt = f.key === 'need' ? DIALOGS.filter((d) => d.need).length
+        : f.key === 'unread' ? DIALOGS.filter((d) => d.unread > 0).length : null;
+      return `<button onclick="setFilter('${f.key}')" class="text-[12px] font-medium px-2.5 py-1 rounded-full border transition ${on ? 'bg-teal-700 text-white border-teal-700' : 'border-neutral-200 text-neutral-600 hover:border-teal-700'}">
+        ${f.label}${cnt ? ` <span class="mono ${on ? 'text-white/80' : 'text-neutral-400'}">${cnt}</span>` : ''}
+      </button>`;
+    }).join('');
+    lucide.createIcons();
+  }
+  function setFilter(k) { activeFilter = k; renderFilters(); renderList(); }
+
+  // ── СПИСОК ДИАЛОГОВ (триаж: секция «Требует решения» сверху) ──
+  let activeId = 'sergey';
+  function dlgMatch(d) {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'need') return d.need;
+    if (activeFilter === 'unread') return d.unread > 0;
+    return d.channels.includes(activeFilter);
+  }
+  function rowHtml(d) {
+    const ch = CH[d.lastCh];
+    const need = d.need;
+    return `<button onclick="openDialog('${d.id}')" class="dlg-row ${d.id===activeId?'active':''} w-full text-left px-3 py-2.5 rounded-lg border border-transparent hover:border-teal-700 transition flex gap-2.5">
+      <div class="relative shrink-0">
+        <div class="w-9 h-9 rounded-full bg-neutral-200 grid place-items-center text-[12px] font-semibold text-neutral-600">${d.guest.split(' ').map((s)=>s[0]).join('').slice(0,2)}</div>
+        <span class="absolute -bottom-0.5 -right-0.5 text-[9px] font-bold px-1 rounded ${ch.cls} ring-2 ring-white">${ch.label}</span>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[13px] font-semibold truncate">${d.guest}</span>
+          <span class="ml-auto text-[11px] text-neutral-400 shrink-0 mono">${d.time}</span>
+        </div>
+        <div class="text-[11.5px] text-neutral-400 truncate">${d.obj} · ${d.dates}</div>
+        <div class="flex items-center gap-1.5 mt-0.5">
+          ${need ? '<span class="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></span>' : `<span class="w-1.5 h-1.5 rounded-full ${confDot[d.conf]} shrink-0" title="уверенность AI"></span>`}
+          <span class="text-[12px] ${need?'text-neutral-700 font-medium':'text-neutral-500'} truncate">${d.preview}</span>
+          ${d.unread ? `<span class="ml-auto shrink-0 mono text-[10px] font-bold text-white bg-teal-700 rounded-full px-1.5 py-0.5">${d.unread}</span>` : ''}
+        </div>
+      </div>
+    </button>`;
+  }
+  function renderList() {
+    const list = DIALOGS.filter(dlgMatch);
+    const need = list.filter((d) => d.need);
+    const rest = list.filter((d) => !d.need);
+    let h = '';
+    if (activeFilter === 'all' && need.length) {
+      h += `<div class="px-3 pt-3 pb-1.5 flex items-center gap-1.5">
+        <i data-lucide="circle-alert" class="w-3.5 h-3.5 text-red-500"></i>
+        <span class="text-[11px] font-semibold uppercase tracking-wide text-red-600">Требует вашего решения</span>
+        <span class="mono text-[10px] font-bold text-red-700 bg-red-100 rounded-full px-1.5">${need.length}</span>
+      </div>`;
+      h += `<div class="px-1.5 space-y-0.5">${need.map(rowHtml).join('')}</div>`;
+      h += `<div class="px-3 pt-3 pb-1.5"><span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Остальные диалоги</span></div>`;
+      h += `<div class="px-1.5 space-y-0.5 pb-3">${rest.map(rowHtml).join('')}</div>`;
+    } else {
+      h += `<div class="px-1.5 pt-2 space-y-0.5 pb-3">${list.map(rowHtml).join('')}</div>`;
+    }
+    document.getElementById('dlgList').innerHTML = h;
+    lucide.createIcons();
+  }
+
+  // ── ЛЕНТА ДИАЛОГА ──
+  const chBadge = (c) => { const x = CH[c]; return x ? `<span class="text-[9px] font-bold px-1 rounded ${x.cls} shrink-0">${x.label}</span>` : ''; };
+  function msgHtml(m) {
+    if (m.from === 'sys') {
+      return `<div class="flex justify-center"><span class="text-[11px] text-neutral-400 bg-neutral-100 rounded-full px-3 py-1">${m.text}</span></div>`;
+    }
+    const mine = m.from !== 'guest'; // bot/host справа
+    const bubble = mine
+      ? 'bg-teal-700 text-white rounded-2xl rounded-br-sm'
+      : 'bg-white border border-neutral-200 text-neutral-800 rounded-2xl rounded-bl-sm';
+    const meta = `<div class="flex items-center gap-1.5 mt-1 ${mine?'justify-end':''}">
+      ${m.ai ? `<span class="inline-flex items-center gap-1 text-[10px] text-neutral-400"><i data-lucide="sparkles" class="w-3 h-3"></i>AI</span>
+        <span class="w-1.5 h-1.5 rounded-full ${confDot[m.conf]}" title="уверенность"></span>` : ''}
+      ${!m.ai && m.from==='host' ? `<span class="text-[10px] text-neutral-400">вы</span>` : ''}
+      ${m.t ? `<span class="text-[10px] text-neutral-400 mono">${m.t}</span>` : ''}
+    </div>`;
+    const actions = `<div class="msg-actions flex items-center gap-0.5 mt-0.5 ${mine?'justify-end':''}">
+      <button onclick="replyMsg(this)" title="Ответить" class="w-7 h-7 grid place-items-center rounded-md hover:bg-neutral-200 text-neutral-500"><i data-lucide="reply" class="w-4 h-4"></i></button>
+      <button onclick="copyMsg(this)" title="Копировать" class="w-7 h-7 grid place-items-center rounded-md hover:bg-neutral-200 text-neutral-500"><i data-lucide="copy" class="w-4 h-4"></i></button>
+      ${mine ? `<button onclick="editMsg(this)" title="Редактировать" class="w-7 h-7 grid place-items-center rounded-md hover:bg-neutral-200 text-neutral-500"><i data-lucide="pencil" class="w-4 h-4"></i></button>` : ''}
+    </div>`;
+    return `<div class="msg-grp flex ${mine?'justify-end':'justify-start'}" data-text="${String(m.text).replace(/"/g,'&quot;')}">
+      <div class="max-w-[78%]">
+        <div class="flex items-center gap-1.5 mb-0.5 ${mine?'justify-end':''}">${chBadge(m.ch)}</div>
+        <div class="${bubble} px-3 py-2 text-[13px] leading-snug select-text">${m.text}</div>
+        ${meta}
+        ${actions}
+      </div>
+    </div>`;
+  }
+
+  let aiActive = true;
+  function openDialog(id) {
+    activeId = id;
+    const d = DIALOGS.find((x) => x.id === id);
+    document.getElementById('dHeadName').textContent = `${d.guest} · ${d.obj}`;
+    document.getElementById('dHeadSub').textContent = `${d.phone} · ${d.dates}`;
+    document.getElementById('thread').innerHTML = d.msgs.map(msgHtml).join('');
+    // эскалация
+    const esc = document.getElementById('escalation');
+    if (d.need && d.suggest) {
+      esc.classList.remove('hidden');
+      document.getElementById('suggestText').textContent = d.suggest;
+      document.getElementById('composerHint').textContent = 'AI ждёт вашего решения по ответу выше';
+    } else {
+      esc.classList.add('hidden');
+      document.getElementById('composerHint').textContent = aiActive ? 'AI отвечает автоматически · вы можете вмешаться в любой момент' : 'AI на паузе · вы отвечаете вручную';
+    }
+    renderCard(d);
+    renderList();
+    // сброс состояния ввода при смене диалога (цитата ответа + поле)
+    cancelReply();
+    const ci = document.querySelector('.composer-input');
+    if (ci) { ci.value = ''; ci.style.height = ''; }
+    // mobile → показать диалог
+    document.getElementById('chatWrap').classList.add('m-dialog');
+    document.getElementById('thread').scrollTop = document.getElementById('thread').scrollHeight;
+    lucide.createIcons();
+  }
+
+  // ── КАРТОЧКА ГОСТЯ ──
+  function renderCard(d) {
+    const codeTone = { loaded:'text-emerald-700 bg-emerald-50 border border-emerald-400', loading:'text-amber-700 bg-amber-50 border border-amber-400', notloaded:'text-red-700 bg-red-50 border border-red-400' }[d.codeState];
+    document.getElementById('cardBody').innerHTML = `
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-teal-700 grid place-items-center text-[16px] font-semibold text-white">${d.guest.split(' ').map((s)=>s[0]).join('').slice(0,2)}</div>
+        <div class="min-w-0">
+          <div class="text-[15px] font-semibold truncate">${d.guest}</div>
+          <div class="text-[12px] text-neutral-500 mono">${d.phone}</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        ${d.channels.map((c)=>`<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md ${CH[c].cls}">${CH[c].label}</span>`).join('')}
+        <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-500">${d.lang}</span>
+      </div>
+
+      <div class="rounded-xl border border-neutral-200 p-3 space-y-2.5">
+        <div class="flex items-center gap-2 text-[12px] font-semibold text-neutral-700"><i data-lucide="calendar" class="w-4 h-4 text-teal-600"></i> Текущая бронь</div>
+        <div class="flex justify-between text-[12.5px]"><span class="text-neutral-500">Объект</span><span class="font-medium">${d.obj}</span></div>
+        <div class="flex justify-between text-[12.5px]"><span class="text-neutral-500">Даты</span><span class="font-medium mono">${d.dates}</span></div>
+        <div class="flex justify-between text-[12.5px]"><span class="text-neutral-500">Оплата</span><span class="font-medium">${d.paid}</span></div>
+        <div class="flex justify-between items-center text-[12.5px]"><span class="text-neutral-500">Код замка</span><span class="mono font-bold px-1.5 py-0.5 rounded-md ${codeTone}">${d.code}</span></div>
+      </div>
+
+      <div class="space-y-1.5">
+        <button onclick="toast('Ссылка на страницу брони скопирована', 'success')" class="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-[12.5px] font-medium transition whitespace-nowrap"><i data-lucide="link" class="w-4 h-4 text-teal-600 shrink-0"></i> Скопировать ссылку</button>
+        <button onclick="goScreen('objects')" class="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-[12.5px] font-medium transition"><i data-lucide="building-2" class="w-4 h-4 text-teal-600"></i> Открыть объект</button>
+        <button onclick="goScreen('calendar')" class="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-[12.5px] font-medium transition"><i data-lucide="file-text" class="w-4 h-4 text-teal-600"></i> Открыть бронь</button>
+      </div>
+
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
+        <div class="flex items-center gap-2 text-[12px] font-semibold text-emerald-800"><i data-lucide="trending-up" class="w-4 h-4"></i> Допродажи</div>
+        <button onclick="toast('Предложить поздний выезд (+1500 ₽)')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-white border border-emerald-200 hover:border-emerald-400 text-[12px] transition"><span>Поздний выезд до 15:00</span><span class="font-semibold text-emerald-700 mono">+1 500 ₽</span></button>
+      </div>
+
+      <button onclick="toast('Команда «Открыть дверь» отправлена на замок', 'success')" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-teal-700 text-white text-[13px] font-semibold hover:bg-teal-800 transition"><i data-lucide="door-open" class="w-[18px] h-[18px]"></i> Открыть дверь</button>
+
+      <div class="space-y-2">
+        <button onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.chev').classList.toggle('rotate-180')" class="w-full flex items-center gap-2 text-[12px] font-semibold text-neutral-700 hover:text-teal-700 transition">
+          <i data-lucide="history" class="w-4 h-4 text-neutral-400"></i> История гостя
+          <span class="text-[11px] font-medium text-neutral-400">${d.past.length ? d.past.length + ' бронь' : ''}</span>
+          <i data-lucide="chevron-down" class="chev w-3.5 h-3.5 text-neutral-400 ml-auto transition-transform"></i>
+        </button>
+        <div class="hidden space-y-1 pt-0.5">
+          ${d.past.length ? d.past.map((p)=>`<div class="flex justify-between text-[12px] text-neutral-500 px-1"><span>${p.obj}</span><span class="mono">${p.d}</span></div>`).join('') : '<div class="text-[12px] text-neutral-400 px-1">Первая бронь у вас</div>'}
+        </div>
+      </div>`;
+    lucide.createIcons();
+  }
+
+  // ── AI toggle / эскалация actions ──
+  function toggleAi() {
+    aiActive = !aiActive;
+    const dot = document.getElementById('aiDot'), lbl = document.getElementById('aiLabel'), btn = document.getElementById('aiToggle');
+    if (aiActive) {
+      btn.className = 'flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-[12px] font-medium hover:border-emerald-400 shrink-0 whitespace-nowrap';
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-500'; lbl.textContent = 'AI активен';
+      toast('AI снова отвечает в этом диалоге');
+    } else {
+      btn.className = 'flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-neutral-300 bg-neutral-100 text-neutral-600 text-[12px] font-medium hover:border-neutral-400 shrink-0 whitespace-nowrap';
+      dot.className = 'w-2 h-2 rounded-full bg-neutral-400'; lbl.textContent = 'AI на паузе';
+      toast('AI поставлен на паузу — вы отвечаете вручную');
+    }
+    const d = DIALOGS.find((x)=>x.id===activeId);
+    if (!(d.need && d.suggest)) document.getElementById('composerHint').textContent = aiActive ? 'AI отвечает автоматически · вы можете вмешаться в любой момент' : 'AI на паузе · вы отвечаете вручную';
+  }
+  function approve() { toast('Ответ отправлен гостю'); document.getElementById('escalation').classList.add('hidden'); }
+  function takeover() { toast('Вы взяли диалог на себя · AI на паузе'); }
+
+  // ── боковые колонки (desktop) ──
+  function toggleCol(cls) { document.getElementById('chatWrap').classList.toggle(cls); }
+  // ── mobile навигация ──
+  function mBack() { document.getElementById('chatWrap').classList.remove('m-dialog'); }
+  const isMobile = () => window.innerWidth <= 768;
+  function openCard() {
+    if (isMobile()) document.getElementById('chatWrap').classList.add('card-open');
+    else document.getElementById('chatWrap').classList.remove('hide-card');
+  }
+  function closeCard() {
+    if (isMobile()) document.getElementById('chatWrap').classList.remove('card-open');
+    else document.getElementById('chatWrap').classList.add('hide-card');
+  }
+  // клик по имени гостя: desktop — тоггл карточки (выезжает/прячется), mobile — открыть
+  function toggleGuestCard() {
+    if (isMobile()) openCard();
+    else document.getElementById('chatWrap').classList.toggle('hide-card');
+  }
+
+  // ── действия с сообщением: ответить / копировать / редактировать ──
+  function msgText(btn) { return btn.closest('.msg-grp').dataset.text; }
+  function copyMsg(btn) {
+    const t = msgText(btn);
+    if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => {});
+    toast('Сообщение скопировано');
+  }
+  function replyMsg(btn) {
+    document.getElementById('replyText').textContent = msgText(btn);
+    const bar = document.getElementById('replyBar');
+    bar.classList.remove('hidden'); bar.classList.add('flex');
+    document.querySelector('.composer-input').focus();
+  }
+  function cancelReply() {
+    const bar = document.getElementById('replyBar');
+    bar.classList.add('hidden'); bar.classList.remove('flex');
+  }
+  function editMsg(btn) {
+    const c = document.querySelector('.composer-input');
+    c.value = msgText(btn); c.dispatchEvent(new Event('input', { bubbles: true })); c.focus();
+    toast('Текст перенесён в поле — правьте и отправляйте');
+  }
+
+  // ── sidebar / drawer / support (наследовано) ──
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer() { document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer() { document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport() { document.getElementById('supportMenu').classList.toggle('hidden'); }
+  document.addEventListener('click', (e) => { if (!e.target.closest('#supportMenu') && !e.target.closest('button[onclick*="toggleSupport"]')) document.getElementById('supportMenu').classList.add('hidden'); });
+
+  function toast(msg, type) {
+    const icons = { success: ['check-circle', '#34d399'], warn: ['alert-triangle', '#fbbf24'], error: ['alert-circle', '#f87171'], info: ['info', '#5eead4'] };
+    const [ic, col] = icons[type] || icons.info;
+    const el = document.getElementById('toast');
+    el.innerHTML = `<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt = setTimeout(() => el.classList.add('hidden'), 1900);
+  }
+  // переход в другой раздел кабинета (через shell-iframe)
+  function goScreen(key) {
+    try { if (window.top && window.top !== window) { window.top.location.hash = key; } else { toast('Переход → ' + key, 'info'); } }
+    catch (e) { toast('Переход → ' + key, 'info'); }
+  }
+
+  // init
+  renderFilters();
+  renderList();
+  openDialog('sergey');
+  lucide.createIcons();
+
+  // авто-рост поля ввода: растёт по содержимому до максимума, потом внутренний скролл
+  const composerEl = document.querySelector('.composer-input');
+  if (composerEl) {
+    const grow = () => {
+      composerEl.style.height = 'auto';
+      // как в мессенджерах: растём почти на пол-экрана (mobile) / до 160px (desktop), дальше внутренний скролл
+      const max = window.innerWidth <= 768 ? Math.round(window.innerHeight * 0.45) : 160;
+      composerEl.style.height = Math.min(composerEl.scrollHeight, max) + 'px';
+    };
+    composerEl.addEventListener('input', grow);
+  }
+</script>
+</body>
+</html>

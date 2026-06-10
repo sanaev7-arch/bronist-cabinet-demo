@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Автоматизация</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* под-разделы (Шаблоны / Сценарии / Каналы / Страница брони) */
+  .sub-btn { white-space: nowrap; padding: 8px 4px; border-bottom: 2px solid transparent; color:#525252; font-size:14px; font-weight:500; }
+  .sub-btn.active { color:#0f766e; border-color:#0f766e; font-weight:600; }
+  .subbar::-webkit-scrollbar { display:none; }
+  .subbar { scrollbar-width:none; }
+
+  /* chip-token переменная в редакторе и превью */
+  .chip { display:inline-flex; align-items:center; gap:3px; vertical-align:baseline; background:#f0fdfa; color:#0f766e; border:1px solid #99f6e4; border-radius:6px; padding:0 6px; font-size:12.5px; font-weight:500; line-height:1.6; white-space:nowrap; user-select:none; }
+  .chip::before { content:''; width:4px; height:4px; border-radius:9999px; background:#0d9488; }
+  .tok-editor { min-height:120px; outline:none; line-height:2; font-size:13.5px; }
+  .tok-editor:focus { border-color:#0f766e; }
+  .tok-editor:empty:before { content:attr(data-ph); color:#a3a3a3; }
+
+  /* телефон-превью Страницы брони — фрейм 1-в-1 как в Объектах */
+  #phoneScroll::-webkit-scrollbar { width:0; }
+  #phoneScroll { scrollbar-width:none; }
+
+  /* меню вставки переменной как bottom-sheet на mobile */
+  .vm-sheet { border-radius:18px 18px 0 0 !important; box-shadow:0 -8px 30px rgba(0,0,0,0.18) !important; }
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    .a-input { font-size: 16px !important; }
+    /* Страница брони — стопкой */
+    .welcome-split { grid-template-columns: 1fr !important; }
+  }
+  .a-input { font-size: 13px; }
+
+  /* аккуратный переключатель (наследован из Объектов) */
+  .tgl { position: relative; width: 40px; height: 22px; border-radius: 9999px; background: #d4d4d4; transition: background .15s ease; flex: none; cursor: pointer; }
+  .tgl.on { background: #0d9488; }
+  .tgl .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: left .15s ease; }
+  .tgl.on .knob { left: 21px; }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5; название экрана — Автоматизация) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Автоматизация</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <!-- шапка раздела + под-табы (sticky) -->
+      <div class="sticky top-0 z-20 bg-white border-b border-neutral-200">
+        <div class="content-pad max-w-[1100px] mx-auto px-6 pt-4">
+          <div class="flex items-start gap-3">
+            <div class="min-w-0">
+              <h1 class="text-[20px] font-bold tracking-tight">Автоматизация</h1>
+              <p class="text-[13px] text-neutral-500">Шаблоны, сценарии, каналы диалога и Страница брони — работают сразу после подключения объекта.</p>
+            </div>
+          </div>
+          <div id="subbar" class="subbar flex items-center gap-5 mt-3 overflow-x-auto"></div>
+        </div>
+      </div>
+      <!-- контент под-раздела -->
+      <div class="content-pad max-w-[1100px] mx-auto px-6 py-5 w-full">
+        <div id="subContent"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- меню вставки переменной (плавающее на desktop / bottom-sheet на mobile) -->
+<div id="vmBackdrop" onclick="closeVarMenu()" class="hidden fixed inset-0 z-[74]" style="background:rgba(0,0,0,0.35);"></div>
+<div id="varMenu" class="hidden fixed z-[75] w-64 bg-white rounded-xl border border-neutral-200 shadow-xl overflow-y-auto text-[13px]"></div>
+
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[80] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Автоматизация активна) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация', active:true },
+    { icon:'calendar', label:'Брони' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки' },
+    { icon:'bar-chart-3', label:'Аналитика' },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ════════════════════ ДАННЫЕ ════════════════════
+
+  // Каталог переменных (chip-tokens) + демо-значения для превью
+  const TOKEN_CATS = [
+    { cat:'Гость', icon:'user', toks:['Имя гостя','Телефон гостя'] },
+    { cat:'Бронь', icon:'calendar', toks:['Дата заезда','Дата выезда','Время заезда','Время выезда','Номер брони'] },
+    { cat:'Объект', icon:'building-2', toks:['Название объекта','Адрес','Wi-Fi сеть','Wi-Fi пароль','Код замка','Правила'] },
+    { cat:'Оплата', icon:'credit-card', toks:['Сумма','Ссылка на оплату'] },
+  ];
+  const SAMPLE = {
+    'Имя гостя':'Сергей', 'Телефон гостя':'+7 916 000-00-00',
+    'Дата заезда':'1 июня', 'Дата выезда':'5 июня', 'Время заезда':'14:00', 'Время выезда':'12:00', 'Номер брони':'AV-148210',
+    'Название объекта':'Тверская 15', 'Адрес':'Москва, ул. Тверская, 15, кв. 48',
+    'Wi-Fi сеть':'RG_Guest', 'Wi-Fi пароль':'12345678', 'Код замка':'9500', 'Правила':'не курить, без вечеринок, тихий час после 23:00',
+    'Сумма':'24 000 ₽', 'Ссылка на оплату':'bronist.ru/pay/a1b2',
+  };
+  // тело шаблона — массив узлов: строка = текст, {t} = переменная
+  const T = (s) => s, V = (v) => ({ v });
+  const TEMPLATES = [
+    { id:'welcome', icon:'hand', name:'Приветствие после брони', trigger:'Бронь подтверждена', on:true, edited:'не менялся',
+      body:[T('Здравствуйте, '),V('Имя гостя'),T('! Спасибо за бронь объекта «'),V('Название объекта'),T('». Вы заезжаете '),V('Дата заезда'),T(' в '),V('Время заезда'),T('. Детали заселения пришлю ближе к дате. Будут вопросы — пишите, я на связи.')] },
+    { id:'preday', icon:'calendar-clock', name:'За день до заезда', trigger:'За 1 день до заезда', on:true, edited:'не менялся',
+      body:[T('Добрый день, '),V('Имя гостя'),T('! Завтра вы заезжаете в «'),V('Название объекта'),T('». Адрес: '),V('Адрес'),T('. Заезд с '),V('Время заезда'),T('. Утром пришлю код от замка и как пройти.')] },
+    { id:'checkin', icon:'key-round', name:'Утро заезда · код доступа', trigger:'Утро дня заезда, 08:00', on:true, edited:'2 дня назад',
+      body:[T('Доброе утро, '),V('Имя гостя'),T('! Ваш код от замка: '),V('Код замка'),T('. Адрес: '),V('Адрес'),T('. Wi-Fi: сеть '),V('Wi-Fi сеть'),T(', пароль '),V('Wi-Fi пароль'),T('. Хорошего отдыха! Что-то понадобится — пишите.')] },
+    { id:'midstay', icon:'message-circle-heart', name:'В середине проживания', trigger:'Середина срока проживания', on:true, edited:'не менялся',
+      body:[T('Здравствуйте, '),V('Имя гостя'),T('! Как вам в «'),V('Название объекта'),T('»? Всё ли в порядке, всего хватает? Нужна помощь — я рядом.')] },
+    { id:'checkout', icon:'door-open', name:'Утро выезда', trigger:'Утро дня выезда, 09:00', on:true, edited:'не менялся',
+      body:[T('Доброе утро, '),V('Имя гостя'),T('! Сегодня день выезда, расчётный час — '),V('Время выезда'),T('. Просто закройте дверь, замок закроется сам. Спасибо, что выбрали нас!')] },
+    { id:'review', icon:'star', name:'Запрос отзыва', trigger:'Через 2 часа после выезда', on:false, edited:'не менялся',
+      body:[T('Спасибо, что были у нас, '),V('Имя гостя'),T('! Будем благодарны за отзыв — он очень помогает. Оставить можно на площадке. Возвращайтесь!')] },
+  ];
+
+  const SCENARIOS = [
+    { on:true, trigger:'Бронь подтверждена', tpl:'Приветствие после брони', timing:'сразу' },
+    { on:true, trigger:'За 1 день до заезда', tpl:'За день до заезда', timing:'в 12:00' },
+    { on:true, trigger:'Утро дня заезда', tpl:'Утро заезда · код доступа', timing:'в 08:00' },
+    { on:true, trigger:'Середина проживания', tpl:'В середине проживания', timing:'в 13:00' },
+    { on:true, trigger:'Утро дня выезда', tpl:'Утро выезда', timing:'в 09:00' },
+    { on:false, trigger:'После выезда', tpl:'Запрос отзыва', timing:'через 2 часа' },
+  ];
+  const TIMINGS = ['сразу','через 1 час','через 2 часа','в 08:00','в 09:00','в 12:00','в 13:00','в 18:00'];
+
+  const CHANNELS = [
+    { id:'maxbot', brand:'max', name:'MAX · бот', desc:'Гость пишет @bronist_bot. Официальный Bot API.', status:'connected', meta:'@bronist_bot' },
+    { id:'maxp', brand:'max', name:'MAX · личный аккаунт', desc:'AI отвечает с вашего личного аккаунта MAX.', status:'disconnected', meta:'', warn:'Обходной путь — официального API нет. Риск блокировки аккаунта, ответственность на вас.' },
+    { id:'tgbot', brand:'telegram', name:'Telegram · бот', desc:'Гость пишет вашему боту. Стабильный канал.', status:'connected', meta:'@bronist_assistant_bot' },
+    { id:'tgbiz', brand:'telegram', name:'Telegram Business', desc:'AI отвечает с вашего аккаунта. Нужен Telegram Premium (~350 ₽/мес у вас).', status:'disconnected', meta:'' },
+    { id:'web', brand:'web', name:'Веб-чат', desc:'Чат прямо на Странице брони. Доступен всегда, подключать не нужно.', status:'always', meta:'' },
+    { id:'wa', brand:'whatsapp', name:'WhatsApp', desc:'AI отвечает с вашего номера. Подключение через серый API.', status:'disconnected', meta:'' },
+  ];
+
+  // Страница брони — глобальный шаблон по умолчанию
+  const WELCOME = {
+    heading:'Добро пожаловать!',
+    text:'Рады видеть вас. Ниже — всё для спокойного заселения. Будут вопросы — напишите в чат внизу, ответим сразу.',
+    show:{ addr:true, code:true, wifi:true, rules:true, upsell:true, pay:false },
+  };
+
+  // ════════════════════ ПОД-ТАБЫ ════════════════════
+  const SUBS = [
+    { key:'templates', label:'Шаблоны', icon:'file-text' },
+    { key:'scenarios', label:'Сценарии', icon:'workflow' },
+    { key:'channels', label:'Каналы', icon:'radio' },
+    { key:'welcome', label:'Страница брони', icon:'smartphone' },
+  ];
+  let activeSub = 'templates';
+  let editingTpl = null; // id редактируемого шаблона или null
+
+  function renderSubbar() {
+    document.getElementById('subbar').innerHTML = SUBS.map((s) => `
+      <button onclick="setSub('${s.key}')" class="sub-btn flex items-center gap-1.5 ${s.key===activeSub?'active':''}">
+        <i data-lucide="${s.icon}" class="w-4 h-4"></i> ${s.label}
+      </button>`).join('');
+    lucide.createIcons();
+  }
+  function setSub(k) { activeSub = k; editingTpl = null; renderSubbar(); renderSub(); }
+
+  function renderSub() {
+    const el = document.getElementById('subContent');
+    if (activeSub === 'templates') el.innerHTML = editingTpl ? tplEditorHtml(editingTpl) : tplListHtml();
+    else if (activeSub === 'scenarios') el.innerHTML = scenariosHtml();
+    else if (activeSub === 'channels') el.innerHTML = channelsHtml();
+    else if (activeSub === 'welcome') el.innerHTML = welcomeHtml();
+    lucide.createIcons();
+    if (activeSub === 'templates' && editingTpl) initTplEditor(editingTpl);
+    if (activeSub === 'welcome') renderPhone();
+    window.scrollTo && (document.querySelector('main').scrollTop = 0);
+  }
+
+  // ── badge канала диалога (исходящее идёт в «канал гостя») ──
+  function channelBadge() {
+    return `<span class="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600"><i data-lucide="message-square" class="w-3 h-3"></i> канал гостя</span>`;
+  }
+
+  // ════════════════════ 1. ШАБЛОНЫ ════════════════════
+  function tplListHtml() {
+    const rows = TEMPLATES.map((t, i) => `
+      <div class="bg-white rounded-xl border border-neutral-200 px-3.5 py-3 flex items-center gap-3 hover:border-teal-700 transition cursor-pointer" onclick="openTpl('${t.id}')">
+        <span class="w-9 h-9 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="${t.icon}" class="w-[18px] h-[18px] text-teal-600"></i></span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[14px] font-semibold truncate">${escapeHtml(t.name)}</span>
+            ${t.on ? '' : '<span class="inline-flex items-center gap-1 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>выключен</span>'}
+          </div>
+          <div class="flex items-center gap-2 mt-0.5 flex-wrap text-[12px] text-neutral-500">
+            <span class="inline-flex items-center gap-1"><i data-lucide="zap" class="w-3 h-3 text-neutral-400"></i> ${escapeHtml(t.trigger)}</span>
+            <span class="text-neutral-300">·</span>
+            <span>${t.edited==='не менялся'?'не менялся':'изменён '+t.edited}</span>
+          </div>
+        </div>
+        <div class="tgl ${t.on?'on':''} shrink-0" onclick="event.stopPropagation(); toggleTpl(${i})" role="switch" aria-checked="${t.on}" aria-label="Включить шаблон"><div class="knob"></div></div>
+        <i data-lucide="chevron-right" class="w-4 h-4 text-neutral-300 shrink-0"></i>
+      </div>`).join('');
+    return `
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
+        <div class="min-w-0">
+          <h2 class="text-[16px] font-bold">Шаблоны сообщений</h2>
+          <p class="text-[13px] text-neutral-500">6 готовых включены сразу. Откройте любой, чтобы поправить под свой голос.</p>
+        </div>
+        <button onclick="newTemplate()" class="sm:ml-auto shrink-0 whitespace-nowrap w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-4 h-4"></i> Новый шаблон</button>
+      </div>
+      <div class="space-y-2">${rows}</div>`;
+  }
+  function toggleTpl(i) { TEMPLATES[i].on = !TEMPLATES[i].on; renderSub(); toast(TEMPLATES[i].on?`Шаблон «${TEMPLATES[i].name}» включён`:`Шаблон «${TEMPLATES[i].name}» выключен`); }
+  function openTpl(id) { editingTpl = id; renderSub(); }
+
+  // ── универсальная модалка (#17 Новый шаблон / #19 Новый сценарий) ──
+  function h24Modal(title, bodyHtml, saveLabel, onSave) {
+    const ov = document.createElement('div');
+    ov.className = 'fixed inset-0 z-[60] bg-black/40 grid place-items-center p-6';
+    ov.innerHTML = `<div class="modal-card bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div class="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+        <h3 class="text-[15px] font-bold">${title}</h3>
+        <button class="mx w-8 h-8 grid place-items-center rounded-md text-neutral-400 hover:bg-neutral-100"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="p-5 space-y-3.5">${bodyHtml}</div>
+      <div class="px-5 py-3.5 bg-neutral-50 border-t border-neutral-100 flex justify-end gap-2">
+        <button class="mc text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 hover:border-neutral-300">Отмена</button>
+        <button class="ms text-[13px] font-semibold px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800">${saveLabel || 'Создать'}</button>
+      </div></div>`;
+    ov.querySelector('.modal-card').addEventListener('click', (e) => e.stopPropagation());
+    const close = () => ov.remove();
+    ov.addEventListener('click', close);
+    ov.querySelector('.mx').onclick = close;
+    ov.querySelector('.mc').onclick = close;
+    ov.querySelector('.ms').onclick = () => { if (onSave(ov) !== false) close(); };
+    document.body.appendChild(ov);
+    if (window.lucide) lucide.createIcons();
+    const f = ov.querySelector('input,select,textarea'); if (f) f.focus();
+  }
+  const TRIGGERS = ['Бронь подтверждена', 'За 1 день до заезда', 'Утро дня заезда', 'Середина проживания', 'Утро дня выезда', 'После выезда'];
+  const MF = 'a-input w-full mt-1 rounded-md border border-neutral-200 px-3 py-2 bg-white focus:outline-none focus:border-teal-700';
+  function newTemplate() {
+    h24Modal('Новый шаблон', `
+      <label class="block"><span class="text-[12px] font-medium text-neutral-600">Название</span>
+        <input id="ntName" placeholder="Напр. Инструкция по парковке" class="${MF}"></label>
+      <label class="block"><span class="text-[12px] font-medium text-neutral-600">Когда отправлять</span>
+        <select id="ntTrig" class="${MF}">${TRIGGERS.map((t) => `<option>${t}</option>`).join('')}</select></label>`,
+      'Создать шаблон',
+      (ov) => {
+        const el = ov.querySelector('#ntName'), name = el.value.trim();
+        if (!name) { el.classList.add('border-red-400'); el.focus(); return false; }
+        TEMPLATES.push({ id: 'tpl' + Date.now(), icon: 'message-square', name, trigger: ov.querySelector('#ntTrig').value, on: true, edited: 'только что', body: [T('Здравствуйте, '), V('Имя гостя'), T('! ')] });
+        renderSub(); toast(`Шаблон «${name}» создан`, 'success');
+      });
+  }
+  function newScenario() {
+    h24Modal('Новый сценарий', `
+      <label class="block"><span class="text-[12px] font-medium text-neutral-600">Триггер</span>
+        <select id="nsTrig" class="${MF}">${TRIGGERS.map((t) => `<option>${t}</option>`).join('')}</select></label>
+      <label class="block"><span class="text-[12px] font-medium text-neutral-600">Шаблон</span>
+        <select id="nsTpl" class="${MF}">${TEMPLATES.map((t) => `<option>${escapeHtml(t.name)}</option>`).join('')}</select></label>
+      <label class="block"><span class="text-[12px] font-medium text-neutral-600">Время отправки</span>
+        <select id="nsTime" class="${MF}">${TIMINGS.map((t) => `<option>${t}</option>`).join('')}</select></label>`,
+      'Создать сценарий',
+      (ov) => {
+        SCENARIOS.push({ on: true, trigger: ov.querySelector('#nsTrig').value, tpl: ov.querySelector('#nsTpl').value, timing: ov.querySelector('#nsTime').value });
+        renderSub(); toast('Сценарий создан', 'success');
+      });
+  }
+
+  // тело шаблона → HTML для contenteditable
+  function bodyToHtml(body) {
+    return body.map((n) => typeof n === 'string'
+      ? escapeHtml(n)
+      : `<span class="chip" contenteditable="false" data-token="${escapeHtml(n.v)}">${escapeHtml(n.v)}</span>`).join('');
+  }
+  function tplEditorHtml(id) {
+    const t = TEMPLATES.find((x) => x.id === id);
+    return `
+      <button onclick="closeTpl()" class="inline-flex items-center gap-1 text-[12.5px] text-neutral-500 hover:text-teal-700 mb-3"><i data-lucide="chevron-left" class="w-4 h-4"></i> Все шаблоны</button>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- редактор -->
+        <div class="bg-white rounded-xl border border-neutral-200 p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-8 h-8 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="${t.icon}" class="w-[18px] h-[18px] text-teal-600"></i></span>
+            <input id="tplName" value="${escapeHtml(t.name)}" class="a-input flex-1 font-semibold text-[14px] rounded-md border border-transparent hover:border-neutral-200 focus:border-teal-700 focus:outline-none px-2 py-1" aria-label="Название шаблона" />
+          </div>
+          <div class="flex items-center gap-2 mb-2.5 text-[12px] text-neutral-500 flex-wrap">
+            <span class="inline-flex items-center gap-1"><i data-lucide="zap" class="w-3.5 h-3.5 text-neutral-400"></i> ${escapeHtml(t.trigger)}</span>
+            <span class="text-neutral-300">·</span>
+            ${channelBadge()}
+          </div>
+          <label class="text-[12px] font-medium text-neutral-600">Текст сообщения</label>
+          <div class="mt-1.5 rounded-lg border border-neutral-200 px-3 py-2.5">
+            <div id="tokEditor" class="tok-editor a-input" contenteditable="true" data-ph="Напишите текст. Подставьте переменные кнопкой ниже." spellcheck="false">${bodyToHtml(t.body)}</div>
+          </div>
+          <div class="flex items-center gap-2 mt-2.5 flex-wrap">
+            <button onclick="openVarMenu(event)" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-2.5 py-1.5 rounded-md border border-dashed border-teal-300 text-teal-700 hover:border-teal-700"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Переменная</button>
+            <span class="text-[11.5px] text-neutral-400">Переменные подставятся данными конкретной брони при отправке.</span>
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100">
+            <button onclick="closeTpl()" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 hover:border-neutral-400 text-neutral-600">Отмена</button>
+            <button onclick="saveTpl()" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> Сохранить</button>
+          </div>
+        </div>
+        <!-- превью -->
+        <div>
+          <div class="flex items-center gap-1.5 mb-2 text-[12px] font-medium text-neutral-500"><i data-lucide="eye" class="w-3.5 h-3.5"></i> Превью с данными последней брони</div>
+          <div class="bg-white rounded-xl border border-neutral-200 p-4">
+            <div class="flex items-center gap-2 mb-3 text-[12px] text-neutral-500">
+              <span class="w-7 h-7 rounded-full bg-teal-700 grid place-items-center text-[11px] font-semibold text-white">С</span>
+              <span>Сергей · Тверская 15 · 1–5 июня</span>
+            </div>
+            <div class="max-w-[78%]">
+              <div id="tplPreview" class="text-[13.5px] leading-relaxed bg-teal-700 text-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 whitespace-pre-wrap"></div>
+              <div class="text-[11px] text-neutral-400 mt-1 ml-1">отправит AI · канал гостя</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+  function closeTpl() { editingTpl = null; renderSub(); }
+
+  let savedRange = null;
+  function initTplEditor() {
+    const ed = document.getElementById('tokEditor');
+    renderTplPreview();
+    ed.addEventListener('input', renderTplPreview);
+    ed.addEventListener('keyup', saveSel);
+    ed.addEventListener('mouseup', saveSel);
+  }
+  function saveSel() {
+    const sel = window.getSelection();
+    if (sel.rangeCount) {
+      const r = sel.getRangeAt(0);
+      if (document.getElementById('tokEditor').contains(r.commonAncestorContainer)) savedRange = r.cloneRange();
+    }
+  }
+  function serializeEditor() {
+    const ed = document.getElementById('tokEditor');
+    let out = '';
+    ed.childNodes.forEach((node) => {
+      if (node.nodeType === 3) out += node.textContent;
+      else if (node.classList && node.classList.contains('chip')) out += SAMPLE[node.dataset.token] ?? node.dataset.token;
+      else if (node.nodeName === 'BR') out += '\n';
+      else out += node.textContent || '';
+    });
+    return out;
+  }
+  function renderTplPreview() {
+    const p = document.getElementById('tplPreview');
+    if (p) p.textContent = serializeEditor();
+  }
+  // — меню вставки переменной —
+  function openVarMenu(e) {
+    e.stopPropagation();
+    saveSel();
+    const m = document.getElementById('varMenu');
+    const isMobile = window.innerWidth <= 768;
+    m.innerHTML = (isMobile ? `<div class="sticky top-0 bg-white pt-2 pb-1"><div class="h-1 w-10 bg-neutral-300 rounded-full mx-auto"></div></div>` : '') +
+      `<div class="px-3 py-2 border-b border-neutral-100 text-[12px] font-semibold text-neutral-500 flex items-center justify-between"><span>Вставить переменную</span>${isMobile?'<button onclick="closeVarMenu()" class="w-6 h-6 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-400"><i data-lucide=\'x\' class=\'w-4 h-4\'></i></button>':''}</div>` +
+      TOKEN_CATS.map((c) => `
+        <div class="px-3 pt-2 pb-1 text-[11px] font-semibold text-neutral-400 uppercase tracking-wide flex items-center gap-1"><i data-lucide="${c.icon}" class="w-3 h-3"></i> ${c.cat}</div>
+        <div class="px-2 pb-1.5 flex flex-wrap gap-1">
+          ${c.toks.map((tk) => `<button onclick="insertVar('${escapeHtml(tk)}')" class="chip" style="cursor:pointer;">${escapeHtml(tk)}</button>`).join('')}
+        </div>`).join('');
+    if (isMobile) {
+      // bottom-sheet: всегда у нижнего края, удобно для пальца
+      m.classList.add('vm-sheet');
+      m.style.left = '0'; m.style.right = '0'; m.style.bottom = '0'; m.style.top = 'auto';
+      m.style.width = '100%'; m.style.maxHeight = '60vh';
+      document.getElementById('vmBackdrop').classList.remove('hidden');
+    } else {
+      m.classList.remove('vm-sheet');
+      const r = e.currentTarget.getBoundingClientRect();
+      m.style.left = Math.min(r.left, window.innerWidth - 270) + 'px';
+      m.style.right = 'auto'; m.style.bottom = 'auto';
+      m.style.top = (r.bottom + 6) + 'px';
+      m.style.width = '16rem'; m.style.maxHeight = '70vh';
+    }
+    m.classList.remove('hidden');
+    lucide.createIcons();
+  }
+  function closeVarMenu() { document.getElementById('varMenu').classList.add('hidden'); document.getElementById('vmBackdrop').classList.add('hidden'); }
+  function insertVar(tok) {
+    const ed = document.getElementById('tokEditor');
+    ed.focus();
+    const chip = document.createElement('span');
+    chip.className = 'chip'; chip.contentEditable = 'false'; chip.dataset.token = tok; chip.textContent = tok;
+    const space = document.createTextNode(' ');
+    const sel = window.getSelection();
+    if (savedRange && ed.contains(savedRange.commonAncestorContainer)) {
+      sel.removeAllRanges(); sel.addRange(savedRange);
+      const r = sel.getRangeAt(0); r.deleteContents();
+      r.insertNode(space); r.insertNode(chip);
+      r.setStartAfter(space); r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+    } else {
+      ed.appendChild(chip); ed.appendChild(space);
+    }
+    savedRange = null;
+    closeVarMenu(); renderTplPreview();
+  }
+  function saveTpl() { const t = TEMPLATES.find((x) => x.id === editingTpl); t.edited = 'только что'; editingTpl = null; renderSub(); toast(`Шаблон «${t.name}» сохранён`); }
+
+  // ════════════════════ 2. СЦЕНАРИИ ════════════════════
+  function scenariosHtml() {
+    const tplNames = TEMPLATES.map((t) => t.name);
+    const rows = SCENARIOS.map((s, i) => {
+      const off = !s.on;
+      return `
+      <div class="bg-white rounded-xl border ${off?'border-neutral-200':'border-neutral-200'} px-3.5 py-3 ${off?'opacity-55':''}">
+        <div class="flex items-center gap-3">
+          <div class="tgl ${s.on?'on':''} shrink-0" onclick="toggleScenario(${i})" role="switch" aria-checked="${s.on}" aria-label="Включить сценарий"><div class="knob"></div></div>
+          <div class="min-w-0 flex-1 flex items-center gap-x-2 gap-y-1.5 flex-wrap text-[13px]">
+            <span class="text-neutral-500">Когда</span>
+            <span class="inline-flex items-center gap-1 font-medium px-2 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-100"><i data-lucide="zap" class="w-3 h-3"></i> ${escapeHtml(s.trigger)}</span>
+            <span class="text-neutral-400">→ отправить</span>
+            <select onchange="setScenarioTpl(${i}, this.value)" class="a-input font-medium rounded-md border border-neutral-200 bg-white px-2 py-1 focus:outline-none focus:border-teal-700 hover:border-teal-700" aria-label="Шаблон сценария">
+              ${tplNames.map((n) => `<option ${n===s.tpl?'selected':''}>${escapeHtml(n)}</option>`).join('')}
+            </select>
+            <span class="text-neutral-400">в</span>
+            <span class="inline-flex items-center gap-1 font-medium px-2 py-1 rounded-md bg-neutral-100 text-neutral-600"><i data-lucide="message-square" class="w-3 h-3"></i> канал гостя</span>
+            <select onchange="setScenarioTiming(${i}, this.value)" class="a-input rounded-md border border-neutral-200 bg-white px-2 py-1 focus:outline-none focus:border-teal-700 hover:border-teal-700" aria-label="Время отправки">
+              ${TIMINGS.map((tm) => `<option ${tm===s.timing?'selected':''}>${escapeHtml(tm)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+        <div class="min-w-0">
+          <h2 class="text-[16px] font-bold">Сценарии</h2>
+          <p class="text-[13px] text-neutral-500">6 сценариев работают сразу. Отключите ненужные или поменяйте шаблон и время.</p>
+        </div>
+        <button onclick="newScenario()" class="sm:ml-auto shrink-0 whitespace-nowrap w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-4 h-4"></i> Новый сценарий</button>
+      </div>
+      <div class="space-y-2">${rows}</div>
+      <div class="flex items-start gap-2 text-[12px] text-neutral-500 bg-white border border-neutral-200 rounded-lg px-3 py-2.5 mt-3">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+        «Канал гостя» — тот мессенджер, где гость ответил первым (MAX, Telegram, WhatsApp или веб-чат). Диалог не переключается между каналами.
+      </div>`;
+  }
+  function toggleScenario(i) { SCENARIOS[i].on = !SCENARIOS[i].on; renderSub(); toast(SCENARIOS[i].on?'Сценарий включён':'Сценарий выключен'); }
+  function setScenarioTpl(i, v) { SCENARIOS[i].tpl = v; toast('Шаблон сценария изменён'); }
+  function setScenarioTiming(i, v) { SCENARIOS[i].timing = v; toast('Время отправки изменено'); }
+
+  // ════════════════════ 3. КАНАЛЫ ════════════════════
+  function brandSvg(b) {
+    if (b === 'telegram') return `<svg viewBox="0 0 24 24" class="w-6 h-6"><path fill="#229ED9" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>`;
+    if (b === 'whatsapp') return `<svg viewBox="0 0 24 24" class="w-6 h-6"><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.247-.694.247-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.999-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>`;
+    if (b === 'max') return `<svg viewBox="0 0 24 24" class="w-6 h-6"><defs><linearGradient id="mx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E90FF"/><stop offset="1" stop-color="#7C3AED"/></linearGradient></defs><rect x="1" y="1" width="22" height="22" rx="7" fill="url(#mx)"/><path fill="#fff" d="M6 16.5v-9h2.2l3 4.6 3-4.6H16.4v9h-2.2v-5.3l-2.8 4.1h-.4l-2.8-4.1v5.3z"/></svg>`;
+    return `<svg viewBox="0 0 24 24" class="w-6 h-6"><rect x="1" y="1" width="22" height="22" rx="7" fill="#0f766e"/><path fill="#fff" d="M12 6.5a5.5 5.5 0 0 0-5.5 5.5c0 .9.22 1.76.6 2.5l-.7 2.6 2.66-.66c.71.36 1.52.56 2.94.56a5.5 5.5 0 0 0 0-11z" opacity=".95"/></svg>`;
+  }
+  function chStatusBadge(st) {
+    if (st === 'connected') return `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Подключён</span>`;
+    if (st === 'always') return `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Активен всегда</span>`;
+    return `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-500"><i data-lucide="circle" class="w-3.5 h-3.5"></i> Не подключён</span>`;
+  }
+  let aiLevel = 'auto'; // draft | auto | pilot
+  const AI_LEVELS = [
+    { key:'draft', icon:'pencil-line', name:'Черновик', desc:'AI готовит ответ, отправляете вы' },
+    { key:'auto', icon:'wand-2', name:'Автоответ типовых', desc:'AI отвечает на простое, сложное → вам' },
+    { key:'pilot', icon:'rocket', name:'Автопилот', desc:'AI отвечает на всё сам' },
+  ];
+  function channelsHtml() {
+    const cards = CHANNELS.map((c) => `
+      <div class="bg-white rounded-xl border border-neutral-200 p-3.5 hover:border-teal-700 transition flex flex-col">
+        <div class="flex items-start gap-3">
+          <span class="shrink-0">${brandSvg(c.brand)}</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[14px] font-semibold">${escapeHtml(c.name)}</div>
+            ${c.meta ? `<div class="text-[12px] text-neutral-400 mono">${escapeHtml(c.meta)}</div>` : ''}
+          </div>
+          ${chStatusBadge(c.status)}
+        </div>
+        <p class="text-[12.5px] text-neutral-500 mt-2 leading-snug flex-1">${escapeHtml(c.desc)}</p>
+        ${c.warn ? `<div class="flex items-start gap-1.5 text-[11.5px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-2.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600"></i> ${escapeHtml(c.warn)}</div>` : ''}
+        <div class="mt-2.5">
+          ${c.status === 'connected'
+            ? `<button onclick="toast('Настройки канала «${escapeHtml(c.name)}»')" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Настроить</button>`
+            : c.status === 'always'
+            ? `<button onclick="toast('Веб-чат настраивается на вкладке «Страница брони»')" class="text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600">Открыть Страницу брони</button>`
+            : `<button onclick="toast('Подключение канала «${escapeHtml(c.name)}»')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Подключить</button>`}
+        </div>
+      </div>`).join('');
+
+    const aiCards = AI_LEVELS.map((l) => {
+      const on = l.key === aiLevel;
+      return `<button onclick="setAiLevel('${l.key}')" class="text-left rounded-lg border p-3 transition ${on?'border-teal-700 bg-teal-50/40':'border-neutral-200 hover:border-teal-700'}">
+        <div class="flex items-center gap-2">
+          <i data-lucide="${l.icon}" class="w-[18px] h-[18px] ${on?'text-teal-700':'text-neutral-500'}"></i>
+          <span class="text-[13.5px] font-semibold ${on?'text-teal-800':''}">${l.name}</span>
+          ${on?'<i data-lucide="check" class="w-4 h-4 ml-auto text-teal-700"></i>':''}
+        </div>
+        <p class="text-[12px] text-neutral-500 mt-1 leading-snug">${l.desc}</p>
+      </button>`;
+    }).join('');
+
+    return `
+      <!-- Поведение AI -->
+      <div class="bg-white rounded-xl border border-neutral-200 p-4 mb-4">
+        <div class="flex items-center gap-2 mb-1"><i data-lucide="bot" class="w-[18px] h-[18px] text-teal-600"></i><h2 class="text-[15px] font-bold">Поведение AI</h2></div>
+        <p class="text-[12.5px] text-neutral-500 mb-3">Уровень по умолчанию для всех диалогов. На конкретном диалоге в «Чатах» можно поставить на паузу или ответить самому.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">${aiCards}</div>
+      </div>
+
+      <!-- Каналы диалога (плитка 2) -->
+      <div class="bg-white rounded-xl border border-neutral-200 p-4 mb-4">
+        <div class="flex items-center gap-2 mb-1"><i data-lucide="radio" class="w-[18px] h-[18px] text-teal-600"></i><h2 class="text-[16px] font-bold">Каналы диалога</h2></div>
+        <p class="text-[13px] text-neutral-500 mb-2.5">Где AI переписывается с гостем. Все каналы видны сразу — подключайте по мере надобности.</p>
+        <div class="flex items-start gap-2 text-[12px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-2.5 mb-3">
+          <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+          <span>Это каналы <b class="font-semibold">диалога</b> с гостем. Источники <b class="font-semibold">броней</b> (PMS RealtyCalendar / TravelLine, iCal, email) подключаются в <a onclick="goScreen('settings')" class="font-semibold text-teal-700 underline cursor-pointer">Настройки → Интеграции</a>.</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards}</div>
+      </div>`;
+  }
+  function setAiLevel(k) { aiLevel = k; renderSub(); toast('Поведение AI: ' + AI_LEVELS.find((l)=>l.key===k).name); }
+
+  // ════════════════════ 4. СТРАНИЦА БРОНИ ════════════════════
+  function welcomeHtml() {
+    const tg = (key, label) => `
+      <label class="flex items-center gap-2.5 py-1.5 cursor-pointer">
+        <span class="tgl ${WELCOME.show[key]?'on':''}" onclick="toggleWelcome('${key}')" role="switch" aria-checked="${WELCOME.show[key]}" aria-label="${escapeHtml(label)}"><span class="knob"></span></span>
+        <span class="text-[13px]">${escapeHtml(label)}</span>
+      </label>`;
+    return `
+      <div class="flex items-start gap-2 text-[12px] text-neutral-600 bg-white border border-neutral-200 rounded-lg px-3 py-2.5 mb-4">
+        <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+        <span>Это <b class="font-semibold">шаблон по умолчанию</b> для всех объектов. Чтобы изменить вид для конкретного объекта — откройте <a onclick="toast('Переход: Объект → вкладка «Гостю»')" class="font-semibold text-teal-700 underline cursor-pointer">объект → вкладка «Гостю»</a> (там он наследует этот шаблон и переопределяется).</span>
+      </div>
+      <div class="welcome-split grid grid-cols-2 gap-5">
+        <!-- РЕДАКТИРОВАНИЕ -->
+        <div class="bg-white rounded-xl border border-neutral-200 p-4">
+          <div class="flex items-center gap-1.5 mb-3 text-[13px] font-semibold"><i data-lucide="pencil" class="w-4 h-4 text-teal-600"></i> Редактирование</div>
+          <div class="space-y-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] text-neutral-500">Заголовок</label>
+              <input id="wHeading" oninput="WELCOME.heading=this.value; renderPhone()" value="${escapeHtml(WELCOME.heading)}" class="a-input rounded-md border border-neutral-200 px-2.5 py-1.5 focus:outline-none focus:border-teal-700" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[12px] text-neutral-500">Приветственный текст</label>
+              <textarea id="wText" oninput="WELCOME.text=this.value; renderPhone()" rows="3" class="a-input resize-none rounded-md border border-neutral-200 px-2.5 py-1.5 leading-snug focus:outline-none focus:border-teal-700">${escapeHtml(WELCOME.text)}</textarea>
+            </div>
+            <div class="pt-1">
+              <div class="text-[12px] font-medium text-neutral-600 mb-0.5">Что показывать гостю</div>
+              ${tg('addr','Адрес объекта')}
+              ${tg('code','Код от замка')}
+              ${tg('wifi','Wi-Fi')}
+              ${tg('rules','Правила')}
+              ${tg('upsell','Допродажи (ранний заезд, поздний выезд)')}
+              ${tg('pay','Платёжные кнопки (оплата аренды)')}
+            </div>
+            <div class="flex items-start gap-2 text-[11.5px] text-neutral-500 bg-neutral-50 rounded-lg px-3 py-2">
+              <i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600"></i>
+              Адрес, код, Wi-Fi и правила берутся из карточки объекта — здесь только показ. Логотип, фото объекта, AI-чат и кнопка «Связаться с хостом» гость видит всегда.
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100">
+            <button onclick="toast('Ссылка генерируется для каждой брони автоматически — копируется в карточке брони')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3 py-1.5 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-600"><i data-lucide="link" class="w-3.5 h-3.5"></i> Про ссылку</button>
+            <button onclick="toast('Шаблон Страницы брони сохранён, применится ко всем объектам')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> Сохранить</button>
+          </div>
+        </div>
+        <!-- ПРЕВЬЮ (фрейм iPhone 1-в-1 как в Объектах; внутреннее наполнение — отдельно) -->
+        <div class="bg-white rounded-xl border border-neutral-200 p-4">
+          <div class="flex items-center gap-2 mb-3"><i data-lucide="smartphone" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">Как увидит гость</span><span class="ml-auto text-[11px] text-neutral-400">прокрутите ↓</span></div>
+          <div class="mx-auto" style="width:264px;">
+            <div style="position:relative;width:264px;height:544px;background:#0b0f14;border-radius:50px;padding:4px;box-shadow:0 0 0 1.5px #1f2937, 0 12px 40px rgba(15,118,110,0.20);">
+              <div style="width:100%;height:100%;background:#f5f5f4;border-radius:46px;overflow:hidden;position:relative;display:flex;flex-direction:column;">
+                <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:32px;background:#000;border-radius:999px;z-index:5;"></div>
+                <div style="height:150px;flex:none;position:relative;display:flex;align-items:flex-end;background:#0f766e;">
+                  <div style="position:absolute;inset:0;display:grid;place-items:center;"><i data-lucide="building-2" class="w-9 h-9 text-white/80"></i></div>
+                  <div style="position:relative;padding:0 16px 14px;color:#fff;"><div class="text-[14px] font-bold">Апартаменты «Уют»</div><div class="text-[10px] opacity-90">Страница брони</div></div>
+                </div>
+                <div id="phoneScroll" style="flex:1;overflow-y:auto;padding:12px 12px 28px;" class="space-y-2"></div>
+                <div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:110px;height:4px;background:#1f2937;border-radius:3px;z-index:5;"></div>
+              </div>
+            </div>
+          </div>
+          <p class="text-[11.5px] text-neutral-400 text-center mt-3">Превью на демо-данных брони (Сергей · Тверская 15)</p>
+        </div>
+      </div>`;
+  }
+  function toggleWelcome(key) { WELCOME.show[key] = !WELCOME.show[key]; const el=event.currentTarget; el.classList.toggle('on'); el.setAttribute('aria-checked', WELCOME.show[key]); renderPhone(); }
+  function renderPhone() {
+    const s = WELCOME.show;
+    const block = (icon, label, value) => `
+      <div class="flex items-start gap-2 px-3 py-2 border-b border-neutral-100">
+        <i data-lucide="${icon}" class="w-4 h-4 mt-0.5 text-teal-600 shrink-0"></i>
+        <div class="min-w-0"><div class="text-[10.5px] text-neutral-400 uppercase tracking-wide">${label}</div><div class="text-[12.5px] font-medium leading-snug">${value}</div></div>
+      </div>`;
+    const html = `
+      <div>
+        <div class="text-[15px] font-bold leading-tight">${escapeHtml(WELCOME.heading) || '&nbsp;'}</div>
+        <div class="text-[12px] text-neutral-600 mt-1 leading-snug">${escapeHtml(WELCOME.text)}</div>
+      </div>
+      <div class="rounded-xl bg-white border border-neutral-200 overflow-hidden">
+        ${block('calendar','Заезд','1 июня, 14:00')}
+        ${block('calendar-x','Выезд','5 июня, 12:00')}
+        ${s.addr ? block('map-pin','Адрес','Москва, ул. Тверская, 15, кв. 48') : ''}
+        ${s.code ? block('key-round','Код от замка','<span class="mono font-bold text-teal-700">9500#</span>') : ''}
+        ${s.wifi ? block('wifi','Wi-Fi','RG_Guest · <span class="mono">12345678</span>') : ''}
+        ${s.rules ? block('scroll-text','Правила','Не курить, без вечеринок, тихо после 23:00') : ''}
+      </div>
+      ${s.upsell ? `<div>
+        <div class="text-[11px] font-semibold text-neutral-500 mb-1.5 px-0.5">Сделать поездку удобнее</div>
+        <div class="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 mb-1.5"><span class="text-[12px] font-medium text-emerald-900">Ранний заезд с 11:00</span><span class="text-[12px] font-semibold mono text-emerald-700">+700 ₽</span></div>
+        <div class="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2"><span class="text-[12px] font-medium text-emerald-900">Поздний выезд до 16:00</span><span class="text-[12px] font-semibold mono text-emerald-700">+900 ₽</span></div>
+      </div>` : ''}
+      <div class="space-y-2 pt-1">
+        ${s.pay ? `<button class="w-full text-[12.5px] font-semibold py-2.5 rounded-lg bg-teal-700 text-white">Оплатить проживание · 24 000 ₽</button>` : ''}
+        <button class="w-full text-[12.5px] font-semibold py-2.5 rounded-lg bg-emerald-600 text-white">Подтвердить заезд</button>
+        <button class="w-full text-[12.5px] font-medium py-2.5 rounded-lg border border-neutral-200 text-neutral-700 flex items-center justify-center gap-1.5"><i data-lucide="message-circle" class="w-4 h-4"></i> Связаться с хостом</button>
+      </div>
+      <div class="rounded-xl bg-teal-50 border border-teal-100 px-3 py-2.5 flex items-center gap-2">
+        <i data-lucide="sparkles" class="w-4 h-4 text-teal-600 shrink-0"></i>
+        <span class="text-[11.5px] text-teal-800">Спросите что угодно — AI-помощник ответит здесь</span>
+      </div>`;
+    const sc = document.getElementById('phoneScroll');
+    if (sc) { sc.innerHTML = html; lucide.createIcons(); }
+  }
+
+  // ════════════════════ ОБЩЕЕ ════════════════════
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer() { document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer() { document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport() { document.getElementById('supportMenu').classList.toggle('hidden'); }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#supportMenu') && !e.target.closest('button[onclick*="toggleSupport"]')) document.getElementById('supportMenu').classList.add('hidden');
+    if (!e.target.closest('#varMenu') && !e.target.closest('button[onclick*="openVarMenu"]')) closeVarMenu();
+  });
+  function toast(msg, type){
+    const icons={success:['check-circle','#34d399'],warn:['alert-triangle','#fbbf24'],error:['alert-circle','#f87171'],info:['info','#5eead4']};
+    const [ic,col]=icons[type]||icons.info;
+    const el=document.getElementById('toast');
+    el.innerHTML=`<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt=setTimeout(()=>el.classList.add('hidden'),1900);
+  }
+  function goScreen(key){ try{ if(window.top&&window.top!==window){window.top.location.hash=key;} else {toast('Переход → '+key,'info');} }catch(e){ toast('Переход → '+key,'info'); } }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVarMenu(); });
+
+  // init
+  renderSubbar();
+  renderSub();
+  lucide.createIcons();
+</script>
+</body>
+</html>

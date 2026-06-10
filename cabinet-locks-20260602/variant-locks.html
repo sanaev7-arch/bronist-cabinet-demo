@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Замки</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* свёрнутый sidebar (desktop) — наследовано из B5 */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  .mobile-only { display: none !important; }
+
+  /* кнопки аккаунтов */
+  .acc-btn { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:500; padding:7px 12px; border-radius:6px; border:1px solid #e5e5e5; color:#404040; background:#fff; cursor:pointer; transition:border-color .12s ease; }
+  .acc-btn:hover { border-color:#0f766e; }
+  .acc-btn-primary { background:#0f766e; color:#fff; border-color:#0f766e; }
+  .acc-btn-primary:hover { background:#115e59; border-color:#115e59; }
+  .acc-btn-danger { background:#dc2626; color:#fff; border-color:#dc2626; }
+  .acc-btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
+
+  /* toggle-слайдер (как в Настройках/проекте) — вместо квадратных чекбоксов */
+  .tgl { position: relative; width: 40px; height: 22px; border-radius: 9999px; background: #d4d4d4; transition: background .15s ease; flex: none; cursor: pointer; }
+  .tgl.on { background: #0d9488; }
+  .tgl .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 9999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: left .15s ease; }
+  .tgl.on .knob { left: 21px; }
+
+  /* ── Маппинг: карточки замков и зоны объектов ── */
+  .lock-card { cursor: grab; transition: border-color .12s ease; }
+  .lock-card:hover { border-color:#0f766e; }
+  .lock-card.dragging { opacity:.45; }
+  /* осиротевший замок (не привязан) — пульсирующая красная рамка */
+  .lock-card.orphan { border-color:#fca5a5; }
+  @keyframes orphanPulse { 0%,100%{ box-shadow:0 0 0 0 rgba(239,68,68,.0);} 50%{ box-shadow:0 0 0 3px rgba(239,68,68,.12);} }
+  .lock-card.orphan { animation: orphanPulse 2.4s ease-in-out infinite; }
+  .lock-card.selected { border-color:#0d9488; box-shadow:0 0 0 3px rgba(13,148,136,.15); }
+
+  /* зона добавления замка в объект — нейтральная (пустой объект читается пустым) */
+  .slot-add { border:1.5px dashed #d4d4d4; background:transparent; color:#737373; transition: border-color .12s ease, background .12s ease; }
+  .obj-row:hover .slot-add { border-color:#0f766e; }
+  /* подсветка drop-таргета — только тот объект, над которым тащим */
+  .obj-row.drop-active .slot-add { border-color:#6ee7b7; background:#ecfdf5; color:#047857; }
+  .obj-row.drop-active { border-color:#6ee7b7; box-shadow:0 0 0 3px rgba(16,185,129,.12); }
+
+  /* callout-примечания — нейтральная плитка (эталон #20), читается и на белом, и на сером */
+  .note-box { background:#fafafa; border:1px solid #e5e5e5; }
+
+  /* демо-свитчер состояний (только для мокапа) */
+  .demo-switch { position: fixed; left: 12px; bottom: 12px; z-index: 80; }
+
+  /* ── MOBILE (≤768px) ── */
+  @media (max-width: 768px) {
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 55; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    .content-pad { padding-left: 12px !important; padding-right: 12px !important; }
+    /* маппинг — стопкой; пул замков наверх для tap-flow */
+    .map-grid { grid-template-columns: 1fr !important; }
+    #poolCol { order: -1; }
+    /* полоса аккаунтов — стопкой */
+    .acc-grid { grid-template-columns: 1fr !important; }
+    .demo-switch { left: 8px; bottom: 8px; }
+    .kb-input { font-size: 16px !important; }
+    /* строка замка на mobile: чип сверху, бейдж+кнопки на всю ширину снизу */
+    .lockrow { flex-wrap: wrap; }
+    .lockrow-ctrl { width: 100%; justify-content: flex-end; }
+  }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="root-shell flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR (наследовано из B5) -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i> Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR (наследовано из B5; название экрана — Замки) -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Замки</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100"><div class="text-[13px] font-semibold">Служба поддержки</div><div class="text-[12px] text-neutral-500">Мы всегда на связи</div></div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div><div class="text-[11.5px] text-neutral-500">Телефон поддержки</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">Написать в поддержку</div><div class="text-[11.5px] text-neutral-500">Telegram-бот</div></div></a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer"><i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i><div><div class="text-[13px] font-medium">База знаний</div><div class="text-[11.5px] text-neutral-500">Документация и гайды</div></div></a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i><span id="bellDot" class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main class="flex-1 overflow-y-auto bg-neutral-100">
+      <div class="content-pad max-w-[1100px] mx-auto px-6 py-6">
+
+        <!-- error-banner (живёт здесь, в разделе Замки) -->
+        <div id="errBanner" class="hidden mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
+          <span class="w-9 h-9 rounded-lg bg-red-100 grid place-items-center shrink-0"><i data-lucide="triangle-alert" class="w-5 h-5 text-red-600"></i></span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13.5px] font-semibold text-red-800">TTLock-аккаунт отключён или истёк токен</div>
+            <div class="text-[12.5px] text-red-700/90">Замки TTLock сейчас недоступны — AI не сможет выдать коды гостям. Переподключите аккаунт, чтобы восстановить доступ.</div>
+          </div>
+          <button onclick="reconnect()" class="shrink-0 acc-btn acc-btn-danger"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Переподключить</button>
+        </div>
+
+        <!-- ════ ЗОНА 1: АККАУНТЫ (всегда на виду) ════ -->
+        <div class="flex items-center gap-2 mb-2.5">
+          <i data-lucide="plug-zap" class="w-[18px] h-[18px] text-teal-600"></i>
+          <h2 class="text-[15px] font-semibold">Аккаунты</h2>
+          <span class="text-[12px] text-neutral-400">— провайдеры замков</span>
+        </div>
+        <div id="accounts" class="acc-grid grid grid-cols-3 gap-3 mb-6"></div>
+
+        <!-- ════ ПУСТОЕ СОСТОЯНИЕ (0 замков) ════ -->
+        <div id="emptyState" class="hidden bg-white rounded-xl border border-dashed border-neutral-300 py-12 px-6 text-center">
+          <div class="w-14 h-14 rounded-2xl bg-teal-50 grid place-items-center mx-auto mb-3"><i data-lucide="lock" class="w-7 h-7 text-teal-600"></i></div>
+          <div class="text-[16px] font-semibold mb-1">Замки не обязательны — но с ними проще</div>
+          <div class="text-[13px] text-neutral-500 max-w-md mx-auto mb-4">С подключённым замком AI сам выдаёт коды гостям и присылает вам событие «гость зашёл». Подключите TTLock — это бесплатно и занимает пару минут.</div>
+          <div class="flex items-center justify-center gap-2 flex-wrap">
+            <button onclick="reconnect()" class="acc-btn acc-btn-primary px-4 py-2"><i data-lucide="plus" class="w-4 h-4"></i> Подключить TTLock</button>
+            <button onclick="toast('Можно подключить замки позже — в этом разделе')" class="acc-btn px-4 py-2"><i data-lucide="chevron-right" class="w-4 h-4"></i> Пропустить</button>
+          </div>
+          <div class="mt-4 text-[12px] text-neutral-400">Нет умного замка? <button onclick="openKbModal()" class="font-medium text-teal-700 hover:underline">Добавьте кейбокс</button> — коробку с ключом и PIN-кодом.</div>
+        </div>
+
+        <!-- ════ ЗОНА 2: МАППИНГ ════ -->
+        <section id="mappingView">
+          <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <div class="flex items-center gap-2">
+              <i data-lucide="link-2" class="w-[18px] h-[18px] text-teal-600"></i>
+              <h2 class="text-[15px] font-semibold">Привязка замков к объектам</h2>
+            </div>
+            <button onclick="goScreen('journal')" class="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline">
+              <i data-lucide="history" class="w-4 h-4"></i> Журнал событий по замкам
+            </button>
+          </div>
+
+          <div class="note-box flex items-start gap-2 text-[12px] text-neutral-700 rounded-lg px-3 py-2.5 mb-4">
+            <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+            <span>Перетащите замок на объект, чтобы привязать (на телефоне — нажмите замок, затем объект). К одному объекту можно привязать <b class="font-medium">несколько замков</b> — например, дверь подъезда и дверь квартиры. Один код гостя открывает все.</span>
+          </div>
+
+          <div class="map-grid grid grid-cols-[1fr_320px] gap-4 items-start">
+            <!-- колонка ОБЪЕКТОВ (слева) -->
+            <div>
+              <div class="flex items-center gap-1.5 mb-2"><i data-lucide="building-2" class="w-4 h-4 text-teal-600"></i><span class="text-[13px] font-semibold">Объекты</span><span class="text-[11.5px] text-neutral-400">— без замков сверху</span></div>
+              <div id="objCol" class="space-y-2.5"></div>
+            </div>
+            <!-- колонка ЗАМКОВ (справа) -->
+            <div id="poolCol">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-1.5"><i data-lucide="key-round" class="w-4 h-4 text-teal-600"></i><span class="text-[13px] font-semibold">Замки</span></div>
+                <span id="poolCount" class="text-[11.5px] text-neutral-400"></span>
+              </div>
+              <div id="pool" class="space-y-2"></div>
+            </div>
+          </div>
+
+          <!-- кнопка «Сохранить привязку» -->
+          <div class="flex items-center justify-between gap-3 mt-4 flex-wrap">
+            <span class="text-[12px] text-neutral-500">После сохранения привязанные объекты уходят в карточки ниже — в маппинге останутся только непривязанные.</span>
+            <div class="flex items-center gap-2">
+              <button id="editMapBtn" onclick="editMapping()" class="acc-btn px-4 py-2 hidden"><i data-lucide="pencil" class="w-3.5 h-3.5"></i> Изменить</button>
+              <button onclick="saveMapping()" class="acc-btn acc-btn-primary px-4 py-2"><i data-lucide="check" class="w-4 h-4"></i> Сохранить привязку</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ════ КАРТОЧКИ ПРИВЯЗАННЫХ ЗАМКОВ (после «Сохранить») ════ -->
+        <section id="savedView" class="hidden mt-8">
+          <div class="flex items-center gap-2 mb-2.5">
+            <i data-lucide="shield-check" class="w-[18px] h-[18px] text-teal-600"></i>
+            <h2 class="text-[15px] font-semibold">Привязанные замки</h2>
+            <span class="text-[12px] text-neutral-400">— индикация по объектам</span>
+          </div>
+          <div id="savedCards" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+        </section>
+
+        <!-- ════ ЗОНА 3: ВРЕМЯ ДОСТУПА ГОСТЯ ════ -->
+        <section id="timingView" class="mt-8">
+          <div class="flex items-center gap-2 mb-2.5">
+            <i data-lucide="clock" class="w-[18px] h-[18px] text-teal-600"></i>
+            <h2 class="text-[15px] font-semibold">Время доступа гостя</h2>
+            <span class="text-[12px] text-neutral-400">— дефолт для всех объектов</span>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+          <!-- Когда загружать код в замок (слой «момент записи PIN в устройство») -->
+          <div class="bg-white rounded-xl border border-neutral-200 p-4">
+            <div class="flex items-center gap-2 mb-1">
+              <i data-lucide="upload-cloud" class="w-[18px] h-[18px] text-teal-600"></i>
+              <h3 class="text-[14px] font-semibold">Когда загружать код в замок</h3>
+            </div>
+            <p class="text-[12.5px] text-neutral-500 mb-3.5">Момент, когда код физически записывается в замок. Создаётся по <b class="font-medium text-neutral-700">первому наступившему</b> из включённых событий.</p>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2.5 rounded-lg border border-neutral-200 p-3">
+                <span class="tgl on shrink-0" onclick="this.classList.toggle('on'); toast('Настройка изменена')"><span class="knob"></span></span>
+                <span class="text-[13px] flex-1">Когда гость внёс <b class="font-medium">залог или предоплату</b></span>
+                <span class="text-[11px] text-neutral-400">надёжный сигнал — через ЮKassa</span>
+              </div>
+              <div class="flex items-center gap-2.5 rounded-lg border border-neutral-200 p-3">
+                <span class="tgl on shrink-0" onclick="this.classList.toggle('on'); toast('Настройка изменена')"><span class="knob"></span></span>
+                <span class="text-[13px]">За</span>
+                <input type="number" value="24" min="1" max="168" class="kb-input w-16 text-[13px] mono border border-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-teal-700" />
+                <span class="text-[13px] flex-1">часов до заезда</span>
+              </div>
+            </div>
+            <div class="note-box flex items-start gap-2 text-[12px] text-neutral-700 rounded-lg px-3 py-2.5 mt-3">
+              <i data-lucide="shield-check" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+              <span>Если бронь <b class="font-medium">отменили или вернули деньги</b> — код сразу удаляется из замка, даже если уже был создан. Возврат не оставит гостю работающий доступ.</span>
+            </div>
+            <div class="flex items-center justify-end gap-3 mt-3.5">
+              <button onclick="toast('Правило создания кода сохранено')" class="acc-btn acc-btn-primary px-4 py-2"><i data-lucide="check" class="w-4 h-4"></i> Сохранить</button>
+            </div>
+          </div>
+
+          <!-- Окно доступа гостя (слой «время действия кода») -->
+          <div class="bg-white rounded-xl border border-neutral-200 p-4">
+            <div class="flex items-center gap-2 mb-1">
+              <i data-lucide="door-open" class="w-[18px] h-[18px] text-teal-600"></i>
+              <h3 class="text-[14px] font-semibold">Окно доступа гостя</h3>
+            </div>
+            <p class="text-[12.5px] text-neutral-500 mb-3.5">За сколько <b class="font-medium text-neutral-700">до</b> заезда код начинает работать и сколько действует <b class="font-medium text-neutral-700">после</b> выезда. Решает ситуацию, когда гость подошёл чуть раньше заселения, а код ещё не активен.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="block rounded-lg border border-neutral-200 p-3">
+                <span class="block text-[12px] font-medium text-neutral-600 mb-1.5">Открывать доступ раньше заезда на</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" value="15" min="0" max="180" class="kb-input w-20 text-[13px] mono border border-neutral-200 rounded-md px-3 py-2 focus:outline-none focus:border-teal-700" />
+                  <span class="text-[13px] text-neutral-500">минут</span>
+                </div>
+              </label>
+              <label class="block rounded-lg border border-neutral-200 p-3">
+                <span class="block text-[12px] font-medium text-neutral-600 mb-1.5">Закрывать доступ после выезда через</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" value="15" min="0" max="180" class="kb-input w-20 text-[13px] mono border border-neutral-200 rounded-md px-3 py-2 focus:outline-none focus:border-teal-700" />
+                  <span class="text-[13px] text-neutral-500">минут</span>
+                </div>
+              </label>
+            </div>
+            <div class="note-box flex items-start gap-2 text-[12px] text-neutral-700 rounded-lg px-3 py-2.5 mt-3">
+              <i data-lucide="shield-check" class="w-4 h-4 mt-0.5 shrink-0 text-teal-600"></i>
+              <span>Раннее окно применяется, <b class="font-medium">только если объект свободен</b> — предыдущая бронь уже завершена. Если объект ещё занят, код активируется строго по времени заезда. Это буфер вежливости, а не платный ранний заезд (тот сдвигает само время заезда в брони).</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 mt-3.5 flex-wrap">
+              <span class="text-[12px] text-neutral-500">Для отдельного объекта окно можно переопределить в его карточке → таб «Замки».</span>
+              <button onclick="toast('Окно доступа сохранено')" class="acc-btn acc-btn-primary px-4 py-2"><i data-lucide="check" class="w-4 h-4"></i> Сохранить</button>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <!-- Генерация кода доступа (перенесено из Автоматизации, #22; вниз после «Время доступа гостя») -->
+        <section id="genCodeView" class="mt-8">
+          <div class="bg-white rounded-xl border border-neutral-200 p-4">
+            <div class="flex items-center gap-2 mb-1"><i data-lucide="key-round" class="w-[18px] h-[18px] text-teal-600"></i><h2 class="text-[15px] font-semibold">Генерация кода доступа</h2></div>
+            <p class="text-[12.5px] text-neutral-500 mb-3">Правило по умолчанию для всех объектов с замком. AI создаёт код к заезду и подставляет в шаблон «Утро заезда». Если телефона гостя нет — код случайный.</p>
+            <select onchange="toast('Правило генерации кода изменено')" class="rounded-md border border-neutral-200 bg-white px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700 w-full sm:w-auto" aria-label="Правило генерации кода">
+              <option>По телефону гостя (последние 4 цифры)</option>
+              <option>Случайный 4-значный код</option>
+            </select>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- модалка добавления кейбокса -->
+<div id="kbModal" class="hidden fixed inset-0 z-[85] items-center justify-center p-4" style="background:rgba(0,0,0,0.4);">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
+    <div class="flex items-center gap-2.5 mb-1">
+      <span class="w-9 h-9 rounded-lg bg-amber-500 text-white grid place-items-center shrink-0"><i data-lucide="package" class="w-5 h-5"></i></span>
+      <h3 class="text-[15px] font-semibold">Добавить кейбокс</h3>
+      <button onclick="closeKbModal()" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-400 hover:bg-neutral-100"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <p class="text-[12.5px] text-neutral-500 mb-3">Назовите кейбокс так, чтобы было понятно, к какой квартире он относится. У кейбокса нет приложения — название поможет не перепутать его при привязке.</p>
+    <label for="kbName" class="block text-[12px] font-medium text-neutral-600 mb-1">Название кейбокса</label>
+    <input id="kbName" name="kbName" class="kb-input w-full text-[13px] border border-neutral-200 rounded-md px-3 py-2 mb-1 focus:outline-none focus:border-teal-700" placeholder="Например: Сейф у двери кв. 48" />
+    <div class="note-box flex items-start gap-2 text-[11.5px] text-neutral-600 rounded-md px-2.5 py-2 mt-2 mb-4">
+      <i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-teal-600"></i>
+      <span>Кейбокс работает в ручном режиме: один код гостя за раз, PIN физически меняет горничная после выезда.</span>
+    </div>
+    <div class="flex items-center justify-end gap-2">
+      <button onclick="closeKbModal()" class="acc-btn px-4 py-2"><i data-lucide="x" class="w-4 h-4"></i> Отмена</button>
+      <button onclick="submitKeybox()" class="acc-btn acc-btn-primary px-4 py-2"><i data-lucide="plus" class="w-4 h-4"></i> Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- демо-свитчер состояний (только для мокапа) -->
+<div class="demo-switch flex items-center gap-1 bg-white border border-neutral-200 rounded-lg shadow-sm p-1">
+  <span class="text-[10.5px] text-neutral-400 px-1.5">демо:</span>
+  <button onclick="setState('normal',this)" class="ds-btn text-[11.5px] font-medium px-2 py-1 rounded-md bg-teal-700 text-white">Норма</button>
+  <button onclick="setState('empty',this)" class="ds-btn text-[11.5px] font-medium px-2 py-1 rounded-md text-neutral-600 hover:bg-neutral-100">Пусто</button>
+  <button onclick="setState('error',this)" class="ds-btn text-[11.5px] font-medium px-2 py-1 rounded-md text-neutral-600 hover:bg-neutral-100">Ошибка</button>
+</div>
+
+<div id="toast" class="hidden fixed bottom-5 right-5 z-[90] bg-neutral-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+  // ── NAV (Замки активны) ──
+  const NAV = [
+    { icon:'layout-dashboard', label:'Главная' },
+    { icon:'message-square', label:'Чаты', badge:'5' },
+    { icon:'zap', label:'Автоматизация' },
+    { icon:'calendar', label:'Календарь' },
+    { icon:'building-2', label:'Объекты' },
+    { icon:'lock', label:'Замки', active:true },
+    { icon:'bar-chart-3', label:'Аналитика' },
+  ];
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  // ── ДАННЫЕ ──
+  const OBJECTS = [
+    { id:'tverskaya', name:'Тверская 15', addr:'ул. Тверская, 15, кв. 48' },
+    { id:'arbat',     name:'Арбат 12',    addr:'ул. Арбат, 12, кв. 7' },
+    { id:'lenina',    name:'Ленина 8',    addr:'ул. Ленина, 8, кв. 21' },
+    { id:'park',      name:'Парковая 3',  addr:'ул. Парковая, 3, кв. 14' },
+    { id:'nevsky',    name:'Невский 20',  addr:'Невский пр., 20, кв. 5' },
+  ];
+  // замки. kind: smart|keybox · provider: ttlock|tuya|keybox · state: online|offline|manual
+  // primary: основной замок объекта (дверь помещения). Дополнительные (подъезд/внешний) — primary:false.
+  const LOCKS = [
+    { id:'l5', kind:'smart',  provider:'ttlock', name:'Дверь кв. 48',         model:'TTLock S31', state:'online',  battery:74, assigned:'tverskaya', primary:true },
+    { id:'l1', kind:'smart',  provider:'ttlock', name:'Подъезд · Тверская',  model:'TTLock G3',  state:'online',  battery:85, assigned:'tverskaya', primary:false },
+    { id:'l2', kind:'smart',  provider:'ttlock', name:'Дверь · Арбат',        model:'TTLock S31', state:'online',  battery:62, assigned:'arbat',     primary:true },
+    { id:'l3', kind:'smart',  provider:'ttlock', name:'Замок без названия',   model:'TTLock G2',  state:'offline', battery:15, assigned:null,        primary:false },
+    { id:'k1', kind:'keybox', provider:'keybox', name:'Сейф · Ленина',        model:'Кейбокс',    state:'manual',  battery:null, assigned:'lenina',   primary:true },
+    { id:'k2', kind:'keybox', provider:'keybox', name:'Сейф (новый)',         model:'Кейбокс',    state:'manual',  battery:null, assigned:null,       primary:false },
+  ];
+
+  let state = 'normal';     // normal | empty | error
+  let selectedLock = null;  // для click-to-place (тач)
+  let objOrder = null;      // зафиксированный порядок объектов (без замков — сверху); добавление замка позицию не меняет
+
+  // порядок: объекты без замков сверху, остальные ниже (в исходном порядке OBJECTS). Фиксируется один раз.
+  function initOrder() {
+    const empty  = OBJECTS.filter(o => !locksOf(o.id).length).map(o => o.id);
+    const filled = OBJECTS.filter(o =>  locksOf(o.id).length).map(o => o.id);
+    objOrder = [...empty, ...filled];
+  }
+
+  // ── АККАУНТЫ ──
+  function renderAccounts() {
+    const ttlockBroken = state === 'error';
+    const smartCount = LOCKS.filter(l => l.kind === 'smart').length;
+    const kbCount = LOCKS.filter(l => l.kind === 'keybox').length;
+
+    const ttlock = state === 'empty'
+      ? accCard('ttlock', 'TTLock', 'shield', 'neutral', 'Не подключён', '0 замков', `<button onclick="reconnect()" class="acc-btn acc-btn-primary"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Подключить</button>`)
+      : ttlockBroken
+        ? accCard('ttlock', 'TTLock', 'shield-alert', 'red', 'Токен истёк', smartCount + ' ' + plural(smartCount,'замок','замка','замков') + ' · недоступны', `<button onclick="reconnect()" class="acc-btn acc-btn-danger">Переподключить</button>`)
+        : accCard('ttlock', 'TTLock', 'shield-check', 'emerald', 'Подключён · токен ОК', smartCount + ' ' + plural(smartCount,'замок','замка','замков'), `<button onclick="toast('Список замков TTLock обновлён')" class="acc-btn"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Обновить</button>`);
+
+    const tuya = accCard('tuya', 'Tuya', 'shield', 'neutral', 'Не подключён', '0 замков', `<button onclick="toast('Подключение Tuya — через OAuth, в реализации')" class="acc-btn acc-btn-primary"><i data-lucide="plug" class="w-3.5 h-3.5"></i> Подключить</button>`);
+
+    const keybox = accCard('keybox', 'Кейбоксы', 'package', 'amber',
+      kbCount ? 'Ручной режим' : 'Нет кейбоксов',
+      (state === 'empty' ? '0' : kbCount) + ' ' + plural(state==='empty'?0:kbCount,'кейбокс','кейбокса','кейбоксов'),
+      `<button onclick="openKbModal()" class="acc-btn acc-btn-primary"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Добавить</button>`);
+
+    document.getElementById('accounts').innerHTML = ttlock + tuya + keybox;
+  }
+  function accCard(prov, name, ic, tone, status, sub, btn) {
+    const ring = { emerald:'text-emerald-600', red:'text-red-600', amber:'text-amber-600', neutral:'text-neutral-400' }[tone];
+    const dot  = { emerald:'bg-emerald-500', red:'bg-red-500', amber:'bg-amber-500', neutral:'bg-neutral-300' }[tone];
+    const badge = { ttlock:'bg-neutral-900 text-white', tuya:'bg-[#ff4800] text-white', keybox:'bg-amber-500 text-white' }[prov];
+    const label = { ttlock:'TTL', tuya:'Tuya', keybox:'KEY' }[prov];
+    return `<div class="bg-white rounded-xl border border-neutral-200 p-3.5 flex flex-col gap-2.5">
+      <div class="flex items-center gap-2.5">
+        <span class="w-9 h-9 rounded-lg ${badge} grid place-items-center text-[10px] font-bold tracking-tight shrink-0">${label}</span>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-semibold leading-tight">${name}</div>
+          <div class="text-[12px] text-neutral-500">${sub}</div>
+        </div>
+        <i data-lucide="${ic}" class="w-[18px] h-[18px] ${ring} shrink-0"></i>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <span class="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-neutral-600"><span class="w-1.5 h-1.5 rounded-full ${dot}"></span>${status}</span>
+        ${btn}
+      </div>
+    </div>`;
+  }
+
+  // ── визуал замка (общий для пула и карточки объекта) ──
+  function lockChipInner(l) {
+    const isKb = l.kind === 'keybox';
+    const iconBg = isKb ? 'bg-amber-50' : 'bg-teal-50';
+    const iconCol = isKb ? 'text-amber-600' : 'text-teal-600';
+    const icon = isKb ? 'package' : 'lock';
+    const broken = state === 'error' && l.provider === 'ttlock';
+    let badge = '';
+    if (isKb) badge = '<span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Ручной режим</span>';
+    else if (broken) badge = '<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-50 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Недоступен</span>';
+    else if (l.state === 'online') badge = '<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Онлайн</span>';
+    else if (l.state === 'offline') badge = '<span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-50 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Офлайн</span>';
+    const batt = (!isKb && l.battery!=null) ? `<span class="inline-flex items-center gap-0.5 text-[11px] ${l.battery>=30?'text-neutral-500':'text-amber-600 font-medium'}"><i data-lucide="${l.battery>=70?'battery-full':l.battery>=30?'battery-medium':'battery-low'}" class="w-3.5 h-3.5"></i>${l.battery}%</span>` : '';
+    return `<span class="w-9 h-9 rounded-lg ${iconBg} grid place-items-center shrink-0"><i data-lucide="${icon}" class="w-5 h-5 ${iconCol}"></i></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5 flex-wrap"><span class="text-[13px] font-semibold truncate">${l.name}</span>${badge}</div>
+        <div class="text-[11.5px] text-neutral-500 flex items-center gap-2 mt-0.5"><span class="inline-flex items-center gap-1"><i data-lucide="cpu" class="w-3 h-3 text-neutral-400"></i>${l.model}</span>${batt}</div>
+      </div>`;
+  }
+
+  // ── пул замков (справа) ──
+  function renderPool() {
+    const pool = LOCKS.filter(l => !l.assigned);
+    const el = document.getElementById('pool');
+    document.getElementById('poolCount').textContent = pool.length ? (pool.length + ' не привязано') : '';
+    if (!pool.length) {
+      el.innerHTML = `<div class="rounded-lg border border-dashed border-neutral-200 py-6 px-3 text-center text-[12px] text-neutral-500"><i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-500 mx-auto mb-1.5"></i><div>Все замки привязаны к объектам</div></div>`;
+      return;
+    }
+    el.innerHTML = pool.map(l => `
+      <div class="lock-card orphan bg-white rounded-lg border border-neutral-200 p-2.5 flex items-center gap-2.5 ${selectedLock===l.id?'selected':''}"
+           draggable="true" data-lock="${l.id}"
+           ondragstart="onDragStart(event,'${l.id}')" ondragend="onDragEnd(event)"
+           onclick="selectLock('${l.id}')">
+        ${lockChipInner(l)}
+        <i data-lucide="grip-vertical" class="w-4 h-4 text-neutral-300 shrink-0"></i>
+      </div>`).join('');
+  }
+
+  // ── колонка объектов (слева, без замков сверху, мульти-замок) ──
+  function renderObjects() {
+    const el = document.getElementById('objCol');
+    if (!objOrder) initOrder();
+    let ordered = objOrder.map(id => OBJECTS.find(o => o.id === id)).filter(Boolean);
+    // #1: после «Сохранить» прячем только объекты из снимка (привязанные на момент сохранения);
+    // свежие перетаскивания видны до следующего «Сохранить»
+    if (mappingSaved) ordered = ordered.filter(o => !savedObjIds.has(o.id));
+    if (mappingSaved && !ordered.length) {
+      el.innerHTML = `<div class="rounded-lg border border-dashed border-neutral-200 py-6 px-3 text-center text-[12px] text-neutral-500"><i data-lucide="check-circle-2" class="w-6 h-6 text-emerald-500 mx-auto mb-1.5"></i><div>Все объекты привязаны</div><div class="mt-0.5 text-neutral-400">Чтобы изменить привязку — нажмите «Изменить» в блоке ниже.</div></div>`;
+      return;
+    }
+    el.innerHTML = ordered.map(o => {
+      const locks = locksOf(o.id);
+      const hasLock = locks.length > 0;
+      const hasKb = locks.some(l => l.kind === 'keybox');
+      const multi = locks.length > 1;
+      const lockRows = locks.map((lock) => {
+        const isKb = lock.kind === 'keybox';
+        const roleBadge = lock.primary
+          ? '<span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-700 text-white shrink-0">Основной</span>'
+          : '<span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 shrink-0">Дополнительный</span>';
+        // «Сделать основным» — только на дополнительных и только когда замков ≥2
+        const makePrimary = (!lock.primary && multi)
+          ? `<button onclick="setPrimary(event,'${lock.id}')" title="Сделать основным" class="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md border border-neutral-200 text-neutral-600 hover:border-teal-700"><i data-lucide="star" class="w-3.5 h-3.5"></i> Сделать основным</button>`
+          : '';
+        // #3: внутри объекта замок компактный (как в сохранённых) — чтобы при многих объектах не было простыни
+        const cBroken = state === 'error' && lock.provider === 'ttlock';
+        const cDot = isKb ? 'bg-amber-500' : (lock.state==='online' && !cBroken ? 'bg-emerald-500' : 'bg-red-500');
+        const cBatt = (!isKb && lock.battery!=null)
+          ? `<span class="inline-flex items-center gap-0.5 text-[10.5px] ${lock.battery>=30?'text-neutral-400':'text-amber-600 font-medium'} shrink-0"><i data-lucide="${lock.battery>=70?'battery-full':lock.battery>=30?'battery-medium':'battery-low'}" class="w-3.5 h-3.5"></i>${lock.battery}%</span>` : '';
+        return `<div class="lockrow rounded-md border ${isKb?'border-amber-200 bg-amber-50/40':'border-teal-200 bg-teal-50/40'} px-2 py-1.5 flex items-center gap-2">
+            <i data-lucide="${isKb?'package':'lock'}" class="w-3.5 h-3.5 ${isKb?'text-amber-600':'text-teal-600'} shrink-0"></i>
+            <span class="text-[12px] font-medium truncate min-w-0 flex-1">${lock.name}</span>
+            <span class="text-[10.5px] text-neutral-400 shrink-0 hidden sm:inline">${provLabel(lock)}</span>
+            ${cBatt}
+            <span class="w-1.5 h-1.5 rounded-full ${cDot} shrink-0" title="${isKb?'Ручной режим':(lock.state==='online'&&!cBroken?'В сети':'Не в сети')}"></span>
+            <div class="lockrow-ctrl flex items-center gap-1.5 shrink-0">
+              ${roleBadge}
+              ${makePrimary}
+              <button onclick="unassign(event,'${lock.id}')" title="Отвязать" class="w-6 h-6 grid place-items-center rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>`;
+      }).join('');
+      const addZone = `<div class="slot-add rounded-lg py-2.5 px-3 flex items-center justify-center gap-2 text-[12px] font-medium">
+          <i data-lucide="${hasLock?'plus':'move'}" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">${hasLock ? 'Перетащите ещё замок сюда' : 'Перетащите замок сюда'}</span>
+          <span class="sm:hidden">${hasLock ? 'Добавить ещё замок' : 'Привязать замок'}</span>
+        </div>`;
+      const kbNote = hasKb ? `<div class="note-box flex items-start gap-1.5 text-[11px] text-neutral-600 rounded-md px-2 py-1.5 mt-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-teal-600"></i><span>Кейбокс: один код гостя, PIN меняет горничная. Коды для сотрудников недоступны.</span></div>` : '';
+      return `<div class="obj-row bg-white rounded-xl border border-neutral-200 p-3" data-obj="${o.id}"
+                   ondragover="onDragOver(event,'${o.id}')" ondragleave="onDragLeave(event,'${o.id}')" ondrop="onDrop(event,'${o.id}')"
+                   onclick="onObjClick('${o.id}')">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-7 h-7 rounded-md bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-4 h-4 text-neutral-500"></i></span>
+          <div class="min-w-0"><div class="text-[13.5px] font-semibold truncate">${o.name}</div><div class="text-[11.5px] text-neutral-400 truncate">${o.addr}</div></div>
+          ${hasLock ? `<span class="ml-auto text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 shrink-0">${locks.length} ${plural(locks.length,'замок','замка','замков')}</span>` : '<span class="ml-auto text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 shrink-0">без замка</span>'}
+        </div>
+        <div class="space-y-1.5">${lockRows}${addZone}</div>
+        ${kbNote}
+      </div>`;
+    }).join('');
+  }
+  // основной замок — первым в списке
+  function locksOf(oid) { return LOCKS.filter(l => l.assigned === oid).sort((a, b) => (b.primary?1:0) - (a.primary?1:0)); }
+  // если у объекта нет основного, а замки есть — назначить основным первый
+  function promotePrimaryIfNeeded(oid) {
+    const locks = LOCKS.filter(l => l.assigned === oid);
+    if (locks.length && !locks.some(l => l.primary)) locks[0].primary = true;
+  }
+  function setPrimary(e, lockId) {
+    e.stopPropagation();
+    const lock = LOCKS.find(l => l.id === lockId);
+    if (!lock || !lock.assigned) return;
+    LOCKS.filter(l => l.assigned === lock.assigned).forEach(l => l.primary = false);
+    lock.primary = true;
+    renderMapping();
+    toast(`«${lock.name}» теперь основной замок`);
+  }
+
+  // ── DnD (desktop) ──
+  let dragId = null;
+  function onDragStart(e, id) { dragId = id; e.dataTransfer.effectAllowed='move'; e.currentTarget.classList.add('dragging'); }
+  function onDragEnd(e) { e.currentTarget.classList.remove('dragging'); }
+  function onDragOver(e, oid) { if (dragId) { e.preventDefault(); e.currentTarget.classList.add('drop-active'); } }
+  function onDragLeave(e, oid) { e.currentTarget.classList.remove('drop-active'); }
+  function onDrop(e, oid) { e.preventDefault(); e.currentTarget.classList.remove('drop-active'); if (dragId) { assign(dragId, oid); dragId=null; } }
+
+  // ── click-to-place (тач + клик) ──
+  function selectLock(id) {
+    selectedLock = (selectedLock === id) ? null : id;
+    renderPool(); lucide.createIcons();
+    if (selectedLock) toast('Выберите объект, чтобы привязать');
+  }
+  function onObjClick(oid) {
+    if (selectedLock) { const id = selectedLock; selectedLock=null; assign(id, oid); }
+  }
+
+  // ── привязка / отвязка (мульти-замок на объект) ──
+  function assign(lockId, oid) {
+    const lock = LOCKS.find(l => l.id === lockId);
+    if (!lock) return;
+    if (lock.assigned === oid) { renderMapping(); return; }
+    const obj = OBJECTS.find(o => o.id === oid);
+    const prevOid = lock.assigned;
+    lock.assigned = oid; // объект может иметь несколько замков — не вытесняем
+    // первый замок объекта по умолчанию — основной; если основной уже есть — этот дополнительный
+    lock.primary = !LOCKS.some(l => l.assigned === oid && l.primary && l.id !== lock.id);
+    if (prevOid) promotePrimaryIfNeeded(prevOid); // у прежнего объекта мог уйти основной
+    renderMapping();
+    toast(`«${lock.name}» привязан к «${obj.name}»`);
+  }
+  function unassign(e, lockId) {
+    e.stopPropagation();
+    const lock = LOCKS.find(l => l.id === lockId);
+    if (!lock) return;
+    const oid = lock.assigned;
+    lock.assigned = null;
+    lock.primary = false;
+    if (oid) promotePrimaryIfNeeded(oid); // если сняли основной, а замки остались — новый основной
+    // если у объекта больше нет замков — поднимаем его в конец зоны «без замков» (инвариант: без замков сверху)
+    if (oid && objOrder && locksOf(oid).length === 0) {
+      objOrder = objOrder.filter(id => id !== oid);
+      let idx = objOrder.findIndex(id => locksOf(id).length > 0);
+      if (idx === -1) idx = objOrder.length;
+      objOrder.splice(idx, 0, oid);
+    }
+    renderMapping();
+    toast('Замок отвязан — вернулся в список');
+  }
+
+  // ── модалка кейбокса ──
+  function openKbModal() {
+    const m = document.getElementById('kbModal'); m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('kbName').value = '';
+    lucide.createIcons();
+    setTimeout(() => document.getElementById('kbName').focus(), 50);
+  }
+  function closeKbModal() { const m = document.getElementById('kbModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function submitKeybox() {
+    const name = (document.getElementById('kbName').value || '').trim() || 'Новый кейбокс';
+    LOCKS.push({ id:'k'+Date.now(), kind:'keybox', provider:'keybox', name, model:'Кейбокс', state:'manual', battery:null, assigned:null });
+    closeKbModal();
+    if (state==='empty') { setState('normal', document.querySelector('.ds-btn')); }
+    else { renderAccounts(); renderMapping(); lucide.createIcons(); }
+    toast(`Кейбокс «${name}» добавлен — перетащите его на объект`);
+  }
+
+  // ── СОХРАНЕНИЕ ПРИВЯЗКИ + КАРТОЧКИ ТЕЛЕМЕТРИИ (ОС п.9) ──
+  // Параметры из research/ttlock-integration-knowledge.md: заряд (getElectricQuantity),
+  // статус Wi-Fi шлюза (ошибки -3002/-2012 «замок не подключён к шлюзу»), online = замок виден через шлюз.
+  function saveMapping() {
+    if (state === 'error') { toast('Не удалось сохранить — TTLock-аккаунт отключён', 'error'); return; }
+    mappingSaved = true;        // #1: в маппинге остаются только непривязанные объекты/замки
+    // снимок привязанных объектов на момент сохранения — прячем именно их
+    savedObjIds = new Set(OBJECTS.filter(o => locksOf(o.id).length).map(o => o.id));
+    renderSaved();
+    renderMapping();            // перерисовать маппинг с фильтром непривязанных
+    document.getElementById('editMapBtn').classList.remove('hidden'); // показать «Изменить» рядом с «Сохранить»
+    const v = document.getElementById('savedView');
+    v.classList.remove('hidden');
+    v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const bound = OBJECTS.filter(o => locksOf(o.id).length).length;
+    toast(`Привязка сохранена · ${bound} ${plural(bound,'объект','объекта','объектов')} с замками`, 'success');
+  }
+  function provLabel(l){ return ({ ttlock:'TTLock', tuya:'TUYA', keybox:'KBOX' })[l.provider] || l.model; }
+  // заряд+Wi-Fi в правый верхний угол карточки объекта (#4); берём показатели основного замка
+  function cardCorner(l) {
+    const isKb = l.kind === 'keybox';
+    if (isKb) return `<span class="text-[10.5px] text-amber-600 font-medium shrink-0">ручной</span>`;
+    const online = l.state === 'online' && !(state === 'error' && l.provider === 'ttlock');
+    const batt = (l.battery != null)
+      ? `<span class="inline-flex items-center gap-0.5 text-[10.5px] ${l.battery>=30?'text-neutral-500':'text-amber-600 font-medium'}"><i data-lucide="${l.battery>=70?'battery-full':l.battery>=30?'battery-medium':'battery-low'}" class="w-3.5 h-3.5"></i>${l.battery}%</span>` : '';
+    const wifi = online
+      ? `<i data-lucide="wifi" class="w-3.5 h-3.5 text-emerald-600" title="шлюз онлайн"></i>`
+      : `<i data-lucide="wifi-off" class="w-3.5 h-3.5 text-red-500" title="шлюз отключён"></i>`;
+    return `<div class="flex items-center gap-1.5 shrink-0">${batt}${wifi}</div>`;
+  }
+  // компактная строка замка для карточки привязанных: только имя + модель (провайдер) + индикатор (#4)
+  function lockChip(l) {
+    const isKb = l.kind === 'keybox';
+    const online = !isKb && l.state === 'online' && !(state === 'error' && l.provider === 'ttlock');
+    const dot = isKb ? 'bg-amber-500' : (online ? 'bg-emerald-500' : 'bg-red-500');
+    return `<div class="flex items-center gap-1.5 rounded-md bg-neutral-50 px-2 py-1">
+      <i data-lucide="${isKb?'package':'lock'}" class="w-3.5 h-3.5 ${isKb?'text-amber-600':'text-teal-600'} shrink-0"></i>
+      <span class="text-[11.5px] truncate min-w-0 flex-1">${l.name}</span>
+      <span class="text-[10.5px] text-neutral-400 shrink-0">${provLabel(l)}</span>
+      <span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0" title="${isKb?'Ручной режим':(online?'В сети':'Не в сети')}"></span>
+    </div>`;
+  }
+  function renderSaved() {
+    const withLocks = OBJECTS.filter(o => locksOf(o.id).length);
+    const host = document.getElementById('savedCards');
+    if (!withLocks.length) {
+      host.innerHTML = `<div class="col-span-2 lg:col-span-4 text-[13px] text-neutral-500 flex items-center gap-2 px-3 py-3 rounded-lg bg-white border border-neutral-200"><i data-lucide="info" class="w-4 h-4" style="color:#0f766e"></i> Пока ни один замок не привязан — перетащите замок на объект выше.</div>`;
+      lucide.createIcons(); return;
+    }
+    host.innerHTML = withLocks.map(o => {
+      const locks = locksOf(o.id);
+      return `<div class="bg-white rounded-xl border border-neutral-200 p-3 flex flex-col h-full">
+        <div class="flex items-start gap-2 mb-2">
+          <span class="w-7 h-7 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-3.5 h-3.5 text-neutral-500"></i></span>
+          <div class="min-w-0 flex-1"><div class="text-[12.5px] font-semibold truncate leading-tight">${o.name}</div><div class="text-[11px] text-neutral-400 truncate">${o.addr}</div></div>
+          ${cardCorner(locks[0])}
+        </div>
+        <div class="space-y-1">${locks.map(lockChip).join('')}</div>
+        <div class="flex items-center gap-1.5 mt-auto pt-2.5 border-t border-neutral-100">
+          <button onclick="toast('Статус замков обновлён')" class="flex-1 inline-flex items-center justify-center gap-1 text-[11.5px] font-medium px-2 py-1.5 rounded-md border border-neutral-200 text-neutral-600 hover:border-teal-700 whitespace-nowrap"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Обновить</button>
+          <button onclick="toast('Команда «открыть» отправлена в замок')" class="flex-1 inline-flex items-center justify-center gap-1 text-[11.5px] font-medium px-2 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800 whitespace-nowrap"><i data-lucide="door-open" class="w-3.5 h-3.5"></i> Открыть</button>
+        </div>
+      </div>`;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  // ── состояния ──
+  // false = режим правки (в маппинге видны ВСЕ объекты); true = сохранено (скрыты только объекты из снимка savedObjIds)
+  let mappingSaved = false;
+  // снимок объектов, привязанных НА МОМЕНТ последнего «Сохранить» — прячем только их.
+  // Свежие перетаскивания после сохранения остаются видимыми до следующего «Сохранить».
+  let savedObjIds = new Set();
+  function renderMapping() { renderPool(); renderObjects(); lucide.createIcons(); }
+  // «Изменить» в сохранённых → вернуть полный маппинг для правки (#2)
+  function editMapping() {
+    mappingSaved = false;
+    document.getElementById('savedView').classList.add('hidden');
+    document.getElementById('editMapBtn').classList.add('hidden');   // в режиме правки кнопка не нужна
+    renderMapping();
+    document.getElementById('mappingView').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function setState(s, btn) {
+    state = s;
+    document.querySelectorAll('.ds-btn').forEach(b => b.className = b.className.replace('bg-teal-700 text-white','text-neutral-600 hover:bg-neutral-100'));
+    if (btn) btn.className = btn.className.replace('text-neutral-600 hover:bg-neutral-100','bg-teal-700 text-white');
+    const isEmpty = s === 'empty';
+    document.getElementById('errBanner').classList.toggle('hidden', s!=='error');
+    document.getElementById('emptyState').classList.toggle('hidden', !isEmpty);
+    document.getElementById('mappingView').classList.toggle('hidden', isEmpty);
+    document.getElementById('timingView').classList.toggle('hidden', isEmpty);
+    document.getElementById('genCodeView').classList.toggle('hidden', isEmpty);
+    document.getElementById('bellDot').classList.toggle('hidden', s!=='error');
+    objOrder = null; // пересобрать порядок при смене демо-состояния (без замков сверху)
+    mappingSaved = false; // смена демо-состояния → режим правки
+    savedObjIds = new Set();
+    document.getElementById('savedView').classList.add('hidden');
+    document.getElementById('editMapBtn')?.classList.add('hidden');
+    renderAccounts();
+    if (!isEmpty) renderMapping();
+    lucide.createIcons();
+  }
+
+  // ── утилиты ──
+  function plural(n, one, few, many) {
+    const m10 = n%10, m100 = n%100;
+    if (m10===1 && m100!==11) return one;
+    if (m10>=2 && m10<=4 && (m100<10||m100>=20)) return few;
+    return many;
+  }
+  function reconnect() { state='normal'; setState('normal', document.querySelector('.ds-btn')); toast('TTLock переподключён · токен обновлён'); }
+
+  // ── общие (B5) ──
+  function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+  function openDrawer() { document.getElementById('sidebar').classList.add('drawer-open'); document.getElementById('drawerBackdrop').classList.add('active'); }
+  function closeDrawer() { document.getElementById('sidebar').classList.remove('drawer-open'); document.getElementById('drawerBackdrop').classList.remove('active'); }
+  function toggleSupport() { document.getElementById('supportMenu').classList.toggle('hidden'); }
+  function toast(msg, type) {
+    const icons = { success: ['check-circle', '#34d399'], warn: ['alert-triangle', '#fbbf24'], error: ['alert-circle', '#f87171'], info: ['info', '#5eead4'] };
+    const [ic, col] = icons[type] || icons.info;
+    const el = document.getElementById('toast');
+    el.innerHTML = `<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt = setTimeout(() => el.classList.add('hidden'), 2200);
+  }
+  // переход в другой раздел кабинета (через shell-iframe)
+  function goScreen(key) {
+    try { if (window.top && window.top !== window) { window.top.location.hash = key; } else { toast('Переход → ' + key, 'info'); } }
+    catch (e) { toast('Переход → ' + key, 'info'); }
+  }
+
+  // init
+  setState('normal');
+  lucide.createIcons();
+</script>
+</body>
+</html>

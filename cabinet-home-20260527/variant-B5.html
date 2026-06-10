@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Бронист · Главная — B5</title>
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: {
+      sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      mono: ['Geist Mono', 'ui-monospace', 'monospace'],
+    },
+    colors: { bordo: '#8b1d41' },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 14px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'Geist Mono', monospace; font-feature-settings:'tnum' 1, 'ss01' 1; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+  .cal-header { cursor: grab; }
+  .cal-header:active { cursor: grabbing; }
+  .cell-bg { cursor: grab; }
+  .cell-bg:active { cursor: grabbing; }
+  .seg { cursor: grab; }
+  .seg.dragging { opacity: .55; cursor: grabbing; }
+  .row-drop { box-shadow: inset 0 0 0 2px #2dd4bf; border-radius: 4px; }
+  /* подсветка диапазона будущей брони при перетаскивании (поверх заливки выходных) */
+  .cell-drop { background-color: rgba(13,148,136,.22) !important; box-shadow: inset 0 0 0 1px #2dd4bf; }
+  /* свёрнутый sidebar (desktop) */
+  aside.collapsed { width: 64px !important; }
+  aside.collapsed .lbl { display: none; }
+  aside.collapsed .nav-row { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .nav-row .grip { display: none; }
+  aside.collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
+  aside.collapsed .brand-logo { display: none; }
+  aside:not(.collapsed) .ic-expand { display: none; }
+  aside.collapsed .ic-collapse { display: none; }
+
+  /* По умолчанию (desktop) скрываем мобильные элементы. Размещаем ДО @media чтобы media-query побеждал в каскаде. */
+  .mobile-only { display: none !important; }
+
+  /* ── MOBILE ADAPTATION (≤768px) ── */
+  @media (max-width: 768px) {
+    /* КРИТИЧНО: блокируем горизонтальный скролл страницы. Иначе pan по шахматке тянет всю вёрстку. */
+    html, body { overflow-x: hidden !important; }
+    main { overflow-x: hidden !important; }
+    /* Sidebar становится drawer — закруглённый правый край */
+    aside#sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 280px !important;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+      z-index: 60;
+      border-radius: 0 18px 18px 0 !important;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      padding-top: env(safe-area-inset-top, 0);
+      overflow: hidden;  /* чтобы радиус срезал содержимое */
+    }
+    aside#sidebar .brand { padding-top: 8px !important; }
+    aside#sidebar.drawer-open { transform: translateX(0); }
+    aside#sidebar.collapsed { width: 280px !important; }  /* отключаем collapse на mobile */
+    aside#sidebar .lbl, aside#sidebar .brand-logo { display: inline-block !important; }
+    aside#sidebar .ic-collapse, aside#sidebar .ic-expand { display: none !important; }
+    .drawer-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 55; opacity: 0; pointer-events: none;
+      transition: opacity 200ms ease;
+    }
+    .drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+    /* Mobile-only / desktop-only видимость */
+    .mobile-only { display: flex !important; }
+    .desktop-only { display: none !important; }
+    /* Topbar компактнее */
+    header.topbar { padding-left: 12px; padding-right: 12px; }
+    /* KPI 2×2 + «+» отдельно снизу полной шириной */
+    #kpi { grid-template-columns: repeat(2, 1fr) !important; }
+    #addMetric { width: 100% !important; height: 44px !important; }
+    .kpi-row { flex-direction: column; }
+    /* Дашборд виджетов — 1 колонка, виджеты на всю ширину */
+    #dashboard { grid-template-columns: 1fr !important; }
+    #dashboard .dash-widget { grid-column: span 1 / span 1 !important; }
+    /* Шахматка: контент горизонтальный скролл, имя объекта sticky left */
+    .scoreboard-scroll { overflow-x: auto; }
+    .obj-cell, .scoreboard-namecol-header { position: sticky; left: 0; z-index: 4; background: #fff; }
+    /* Padding-content уменьшаем */
+    main > div.px-6 { padding-left: 12px !important; padding-right: 12px !important; }
+    div.sticky.px-6 { padding-left: 12px !important; padding-right: 12px !important; padding-top: 12px !important; padding-bottom: 12px !important; }
+    /* Алерт-лента однострочная */
+    .alert-banner { padding: 8px 10px !important; gap: 8px !important; }
+    .alert-banner .alert-icon-box { width: 32px !important; height: 32px !important; }
+    .alert-subtitle { display: none; }
+    .alert-cta-text { display: none; }
+    /* Шахматка mobile-доводка */
+    #period { white-space: nowrap !important; }
+    .scoreboard-tips { display: none !important; }       /* drag-подсказки нерелевантны на тач */
+    .scoreboard-legend { display: none !important; }     /* легенду скрываем на mobile (цвет читается на полосе) */
+    .scoreboard-toolbar { flex-wrap: wrap !important; gap: 6px !important; }
+    /* Open: открепляем sticky-блок (алерт+KPI), чтобы шахматка занимала весь экран при скролле */
+    div.sticky.top-0.z-30 { position: static !important; border-bottom: 0 !important; }
+    /* KPI plates: равная высота через grid-auto-rows (min-height на iOS Safari ненадёжен) */
+    #kpi { gap: 8px !important; grid-auto-rows: 1fr !important; align-items: stretch !important; }
+    #kpi > div { padding: 10px !important; height: 100% !important; display: flex; flex-direction: column; justify-content: space-between; }
+    #kpi svg { width: 44px !important; height: 44px !important; }
+    #kpi .mono.text-\\[26px\\] { font-size: 22px !important; }
+    #kpi .text-\\[12\\.5px\\] { font-size: 11.5px !important; }
+    #kpi .text-\\[10\\.5px\\] { font-size: 10px !important; padding: 1px 5px !important; }
+    /* Шахматка: бары не должны наезжать на sticky-колонку имён + узкая sticky-колонка на mobile */
+    .obj-cell, .scoreboard-namecol-header {
+      z-index: 15 !important;
+      width: 140px !important;
+      min-width: 140px !important;
+      padding-left: 8px !important; padding-right: 8px !important;
+      box-shadow: 4px 0 6px -4px rgba(0,0,0,0.12);
+    }
+    /* шахматка-scroller: только горизонтальный touch внутри, не передавать наверх */
+    div.p-3.overflow-x-auto {
+      touch-action: pan-x;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+  /* Touch-устройства (нет hover): прячем «убрать метрику» иначе он залипает при тапе */
+  @media (hover: none) {
+    #kpi > div > button[title="Убрать метрику"] { display: none !important; }
+  }
+  /* Выделение карточки по клику (как у диалогов в чатах): бледно-зелёный фон + teal-рамка */
+  .card-sel { background:#f0fdfa !important; border-color:#0f766e !important; }
+</style>
+</head>
+<body class="bg-neutral-100 text-neutral-900">
+<div class="flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR со свёртыванием -->
+  <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
+    <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
+      <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
+        <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
+        <i data-lucide="panel-left-open" class="ic-expand w-[18px] h-[18px]"></i>
+      </button>
+    </div>
+    <nav id="nav" class="flex-1 px-2.5 py-4 space-y-1"></nav>
+    <!-- Mobile-only: Тариф и Поддержка (на desktop живут в topbar) -->
+    <div class="mobile-only px-2.5 py-3 border-t border-neutral-200" style="flex-direction:column; gap:4px;">
+      <div class="flex items-center justify-between px-2 py-2.5 rounded-lg">
+        <span class="text-[15px] font-medium text-neutral-600">Тариф</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[12px] font-medium px-2.5 py-1 rounded-md bg-teal-700 text-white">Изменить</button>
+        </div>
+      </div>
+      <a class="flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-700 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="message-circle" class="w-5 h-5 shrink-0 text-teal-600"></i>
+        Поддержка
+        <i data-lucide="chevron-right" class="w-4 h-4 ml-auto text-neutral-400"></i>
+      </a>
+    </div>
+    <div class="px-2.5 py-3 border-t border-neutral-200">
+      <a class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg text-[15px] font-medium text-neutral-600 hover:bg-neutral-100 cursor-pointer">
+        <i data-lucide="grip-vertical" class="grip w-4 h-4 text-neutral-300"></i>
+        <i data-lucide="settings" class="w-5 h-5 shrink-0"></i>
+        <span class="lbl">Настройки</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- BACKDROP для mobile drawer -->
+  <div id="drawerBackdrop" class="drawer-backdrop" onclick="closeDrawer()"></div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR: «Тариф» (одно слово), «Поддержка» dropdown, аватар + имя -->
+    <header class="topbar h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between px-5 bg-white">
+      <div class="flex items-center gap-3">
+        <button onclick="openDrawer()" class="mobile-only w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-700"><i data-lucide="menu" class="w-5 h-5"></i></button>
+        <div class="font-semibold text-[15px]">Сводка</div>
+      </div>
+      <div class="flex items-center gap-2.5 desktop-only">
+        <div class="flex items-center gap-1.5 border border-neutral-200 rounded-lg p-1 bg-white">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded-md bg-teal-50 text-teal-700">Free</span>
+          <button class="text-[13px] font-medium px-3 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">Тариф</button>
+        </div>
+        <!-- Поддержка с dropdown -->
+        <div class="relative">
+          <button onclick="toggleSupport()" class="flex items-center gap-2 h-10 px-3 rounded-lg hover:bg-neutral-100 text-neutral-700 text-[13px] font-medium">
+            <i data-lucide="message-circle" class="w-[18px] h-[18px] text-neutral-500"></i> Поддержка
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+          </button>
+          <div id="supportMenu" class="hidden absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-neutral-200 shadow-lg z-40 overflow-hidden">
+            <div class="px-4 py-3 border-b border-neutral-100">
+              <div class="text-[13px] font-semibold">Служба поддержки</div>
+              <div class="text-[12px] text-neutral-500">Мы всегда на связи</div>
+            </div>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer">
+              <i data-lucide="phone" class="w-[18px] h-[18px] text-teal-600"></i>
+              <div>
+                <div class="text-[13px] font-medium mono">+7 (495) 123-45-67</div>
+                <div class="text-[11.5px] text-neutral-500">Телефон поддержки</div>
+              </div>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer">
+              <i data-lucide="send" class="w-[18px] h-[18px] text-teal-600"></i>
+              <div>
+                <div class="text-[13px] font-medium">Написать в поддержку</div>
+                <div class="text-[11.5px] text-neutral-500">Telegram-бот</div>
+              </div>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer">
+              <i data-lucide="bug" class="w-[18px] h-[18px] text-teal-600"></i>
+              <div>
+                <div class="text-[13px] font-medium">Сообщить об ошибке</div>
+                <div class="text-[11.5px] text-neutral-500">Форма обратной связи</div>
+              </div>
+            </a>
+            <a class="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer">
+              <i data-lucide="book-open" class="w-[18px] h-[18px] text-teal-600"></i>
+              <div>
+                <div class="text-[13px] font-medium">База знаний</div>
+                <div class="text-[11.5px] text-neutral-500">Документация и гайды</div>
+              </div>
+            </a>
+          </div>
+        </div>
+        <button class="w-10 h-10 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <!-- аватар + имя -->
+        <button class="flex items-center gap-2 pl-1 pr-2.5 h-10 rounded-lg hover:bg-neutral-50">
+          <div class="w-8 h-8 rounded-full bg-teal-700 grid place-items-center text-[13px] font-semibold text-white">М</div>
+          <span class="text-[13px] font-medium">Михаил</span>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400"></i>
+        </button>
+      </div>
+      <!-- mobile topbar right: bell + avatar -->
+      <div class="mobile-only items-center gap-2">
+        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+        </button>
+        <div class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="px-6 py-5">
+        <!-- ШАПКА СВОДКИ (без задвоения заголовка — он в топбаре) -->
+        <div class="flex items-center justify-between mb-4 gap-2">
+          <span class="text-[12px] text-neutral-400 desktop-only">соберите виджеты под себя — добавляйте, убирайте, тяните мышью</span>
+          <div class="flex items-center gap-1.5 ml-auto">
+            <button onclick="resetWidgets()" title="Сбросить к стандартному набору" class="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Сбросить</button>
+            <button onclick="openWidgetLib()" class="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Виджет</button>
+          </div>
+        </div>
+        <!-- СЕТКА ВИДЖЕТОВ -->
+        <div id="dashboard" class="grid grid-cols-4 gap-4 auto-rows-min"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- toast -->
+<div id="toast" class="hidden fixed bottom-5 right-5 z-[60] bg-neutral-900 text-white text-[13px] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2"></div>
+
+<!-- БИБЛИОТЕКА ВИДЖЕТОВ -->
+<div id="widgetLib" class="hidden fixed inset-0 z-50 bg-black/40 grid place-items-center p-6" onclick="if(event.target===this)closeWidgetLib()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-neutral-200">
+      <i data-lucide="layout-grid" class="w-[18px] h-[18px] text-teal-600"></i>
+      <h2 class="text-[15px] font-semibold">Библиотека виджетов</h2>
+      <span class="text-[12px] text-neutral-400">добавьте на дашборд то, что нужно именно вам</span>
+      <button onclick="closeWidgetLib()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <div id="widgetLibBody" class="p-5 overflow-y-auto space-y-5"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА шахматки -->
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/40 p-6">
+  <div class="bg-white rounded-xl shadow-2xl h-full flex flex-col">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-200">
+      <div class="flex items-center gap-2.5">
+        <i data-lucide="calendar-range" class="w-5 h-5 text-teal-600"></i>
+        <h2 class="text-[15px] font-semibold">Шахматка — на весь экран</h2>
+        <span id="periodModal" class="text-[12px] font-medium mono text-bordo"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex items-center rounded-lg border border-neutral-200 overflow-hidden">
+          <button onclick="shift(-7)" class="w-8 h-8 grid place-items-center hover:bg-neutral-100 text-neutral-500"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <button onclick="goToday()" class="px-2.5 h-8 text-[12px] font-medium border-x border-neutral-200 hover:bg-neutral-100">Сегодня</button>
+          <button onclick="shift(7)" class="w-8 h-8 grid place-items-center hover:bg-neutral-100 text-neutral-500"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+        </div>
+        <button onclick="closeModal()" class="w-8 h-8 grid place-items-center rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+    </div>
+    <div class="p-3 overflow-auto flex-1"><div id="gridModal" class="min-w-[900px]"></div></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: Создание брони (выделение ячеек) -->
+<div id="createModal" class="hidden fixed inset-0 z-[70] items-center justify-center p-4" style="background:rgba(0,0,0,0.45)" onclick="if(event.target===this)closeCreateHome()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-neutral-200">
+      <i data-lucide="calendar-plus" class="w-[18px] h-[18px] text-teal-600"></i>
+      <h2 class="text-[15px] font-semibold">Новая бронь</h2>
+      <button onclick="closeCreateHome()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <div class="px-5 py-4 space-y-3">
+      <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Объект</label><select id="ch_obj" class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700"></select></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Заезд</label><input id="ch_in" class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] bg-neutral-50 mono" readonly></div>
+        <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Выезд</label><input id="ch_out" class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] bg-neutral-50 mono" readonly></div>
+      </div>
+      <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Гость</label><input id="ch_guest" placeholder="Имя гостя" class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Телефон</label><input id="ch_phone" placeholder="+7 ..." class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700"></div>
+        <div class="flex flex-col gap-1"><label class="text-[12px] text-neutral-500">Гостей</label><input id="ch_guests" type="number" value="2" min="1" class="rounded-md border border-neutral-200 px-2.5 py-2 text-[13px] focus:outline-none focus:border-teal-700"></div>
+      </div>
+    </div>
+    <div class="px-5 py-3 border-t border-neutral-200 flex justify-end gap-2">
+      <button onclick="closeCreateHome()" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 text-neutral-600">Отмена</button>
+      <button onclick="submitCreateHome()" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="check" class="w-4 h-4"></i> Создать бронь</button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: Замок (клик по замку в «Состояние замков») -->
+<div id="lockModal" class="hidden fixed inset-0 z-[68] items-center justify-center p-4" style="background:rgba(0,0,0,0.45)" onclick="if(event.target===this)closeLockModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+    <div id="lmHead" class="border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="lmBody" class="px-5 py-4"></div>
+    <div class="border-t border-neutral-200 px-5 py-3 flex items-center gap-2">
+      <button onclick="toast('Статус замка обновлён')" class="flex-1 inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-md border border-neutral-200 text-neutral-600 hover:border-teal-700"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Обновить</button>
+      <button onclick="toast('Команда «открыть» отправлена в замок')" class="flex-1 inline-flex items-center justify-center gap-1.5 text-[13px] font-medium px-3 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="door-open" class="w-4 h-4"></i> Открыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: Быстрый просмотр виджета (#7) -->
+<div id="wqModal" class="hidden fixed inset-0 z-[64] items-center justify-center p-4" style="background:rgba(0,0,0,0.45)" onclick="if(event.target===this)closeWq()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden">
+    <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-neutral-200">
+      <i id="wqIcon" data-lucide="circle" class="w-[18px] h-[18px] text-teal-600"></i>
+      <h2 id="wqTitle" class="text-[15px] font-semibold"></h2>
+      <button onclick="closeWq()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+    <div id="wqBody" class="px-5 py-4 overflow-y-auto"></div>
+    <div id="wqFoot" class="px-5 py-3 border-t border-neutral-200 flex justify-end"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: Полная карточка брони (как в Календаре) -->
+<div id="bkModal" class="hidden fixed inset-0 z-[66] items-center justify-center p-4" style="background:rgba(0,0,0,0.45)" onclick="if(event.target===this)closeBkModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div id="bkmHead" class="shrink-0 border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="bkmBody" class="flex-1 overflow-y-auto px-5 py-4"></div>
+    <div id="bkmFoot" class="shrink-0 border-t border-neutral-200 px-5 py-3 flex items-center gap-2"></div>
+  </div>
+</div>
+
+<!-- МОДАЛКА: Объект (клик по адресу в левом столбце, #26) -->
+<div id="objModal" class="hidden fixed inset-0 z-[68] items-center justify-center p-4" style="background:rgba(0,0,0,0.45)" onclick="if(event.target===this)closeObjModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+    <div id="omHead" class="border-b border-neutral-200 px-5 pt-4 pb-3.5"></div>
+    <div id="omBody" class="px-5 py-4 space-y-3"></div>
+    <div class="border-t border-neutral-200 px-5 py-3 flex items-center justify-end gap-2">
+      <button onclick="closeObjModal()" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 text-neutral-600 hover:border-neutral-300">Закрыть</button>
+      <button onclick="openObjDeep()" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="pencil" class="w-4 h-4"></i> Открыть и редактировать</button>
+    </div>
+  </div>
+</div>
+
+<script src="lucide.min.js"></script>
+<script src="data2.js?v=3"></script>
+<script>
+  let currentWS = 0;
+
+  // SIDEBAR collapse — CSS сам переключает иконки close/open через :not(.collapsed) / .collapsed
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+  }
+  // MOBILE drawer
+  function openDrawer() {
+    document.getElementById('sidebar').classList.add('drawer-open');
+    document.getElementById('drawerBackdrop').classList.add('active');
+  }
+  function closeDrawer() {
+    document.getElementById('sidebar').classList.remove('drawer-open');
+    document.getElementById('drawerBackdrop').classList.remove('active');
+  }
+  // Support dropdown
+  function toggleSupport() {
+    document.getElementById('supportMenu').classList.toggle('hidden');
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#supportMenu') && !e.target.closest('button[onclick*="toggleSupport"]')) {
+      document.getElementById('supportMenu').classList.add('hidden');
+    }
+  });
+
+  // NAV
+  document.getElementById('nav').innerHTML = NAV.map((n) => `
+    <a title="${n.label}" class="nav-row flex items-center gap-2 px-2 py-2.5 rounded-lg cursor-pointer text-[15px] ${n.active ? 'bg-teal-700 text-white font-semibold' : 'text-neutral-700 font-medium hover:bg-neutral-100'}">
+      <i data-lucide="grip-vertical" class="grip w-4 h-4 ${n.active ? 'text-white/40' : 'text-neutral-300'}"></i>
+      <i data-lucide="${n.icon}" class="w-5 h-5 shrink-0"></i>
+      <span class="lbl">${n.label}</span>
+      ${n.badge ? `<span class="lbl ml-auto mono text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n.active ? 'bg-white/25 text-white' : 'bg-teal-700 text-white'}">${n.badge}</span>` : ''}
+    </a>`).join('');
+
+  // Donut-диаграмма: сегменты [{frac, color}] + опциональный центр-текст. frac в [0..1], сумма ≤ 1.
+  function donut(segments, centerText) {
+    const SZ = 56, R = 22, SW = 6;
+    const C = 2 * Math.PI * R;
+    let offset = 0;
+    const arcs = segments.map((s) => {
+      const len = s.frac * C;
+      const dash = `${len} ${C - len}`;
+      const arc = `<circle cx="${SZ/2}" cy="${SZ/2}" r="${R}" fill="none" stroke="${s.color}" stroke-width="${SW}" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${SZ/2} ${SZ/2})" stroke-linecap="butt"/>`;
+      offset += len;
+      return arc;
+    }).join('');
+    const cText = centerText ? `<text x="${SZ/2}" y="${SZ/2+4}" text-anchor="middle" font-size="11" font-weight="700" font-family="Geist Mono, monospace" fill="#0f172a">${centerText}</text>` : '';
+    return `<svg viewBox="0 0 ${SZ} ${SZ}" width="${SZ}" height="${SZ}" class="shrink-0">
+      <circle cx="${SZ/2}" cy="${SZ/2}" r="${R}" fill="none" stroke="#f1f5f9" stroke-width="${SW}"/>
+      ${arcs}${cText}
+    </svg>`;
+  }
+  // ── ДАШБОРД ИЗ ВИДЖЕТОВ (C-bis) ───────────────────────────────
+  const fmtRu = (n) => n.toLocaleString('ru-RU');
+  const TODAY = 0;
+  const checkinsToday  = BOOKINGS.filter((b) => b.start === TODAY);
+  const checkoutsToday = BOOKINGS.filter((b) => b.end === TODAY);
+  const stayingNow     = BOOKINGS.filter((b) => b.start < TODAY && b.end > TODAY);
+
+  // переход в другой раздел кабинета (через shell-iframe)
+  function goScreen(key) {
+    try {
+      if (window.top && window.top !== window) { window.top.location.hash = key; }
+      else { toast('Переход → ' + key, 'info'); }
+    } catch (e) { toast('Переход → ' + key, 'info'); }
+  }
+
+  // донат со значением в центре
+  function statDonut(frac, color) { return donut([{ frac, color }], Math.round(frac * 100) + '%'); }
+
+  // крупное число + дельта + донат
+  function statBig(value, unit, delta, donutHtml, extra) {
+    return `<div class="flex items-start gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-baseline gap-1">
+          <span class="mono text-[26px] font-bold leading-none">${value}</span>
+          ${unit ? `<span class="text-[13px] font-medium text-neutral-400">${unit}</span>` : ''}
+        </div>
+        <span class="inline-block mt-2 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">${delta}</span>
+        ${extra ? `<div class="text-[11.5px] font-medium text-neutral-500 mt-1.5">${extra}</div>` : ''}
+      </div>
+      ${donutHtml}
+    </div>`;
+  }
+
+  // строка операционной очереди — severity (amber/red), действие → переход в раздел
+  function needRow(tone, icon, title, sub, action, screen) {
+    const dot = tone === 'red' ? 'bg-red-500' : 'bg-amber-500';
+    const titleCls = tone === 'red' ? 'text-red-600' : 'text-neutral-800';   // красная предупреждающая надпись
+    const iconCls = tone === 'red' ? 'text-red-500' : 'text-neutral-500';
+    return `<div class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border ${tone==='red'?'border-red-200':'border-neutral-200'} hover:border-teal-700 transition">
+      <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
+      <i data-lucide="${icon}" class="w-[16px] h-[16px] ${iconCls} shrink-0"></i>
+      <div class="min-w-0 flex-1">
+        <div class="text-[13px] font-medium ${titleCls} truncate leading-tight">${title}</div>
+        <div class="text-[11.5px] text-neutral-500 truncate leading-tight">${sub}</div>
+      </div>
+      <button onclick="goScreen('${screen}')" class="shrink-0 flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1.5 rounded-md bg-teal-700 text-white hover:bg-teal-800">${action} <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+    </div>`;
+  }
+
+  // список заездов/выездов/проживающих + empty-state (callout инфо)
+  function arrivalList(list, emptyText) {
+    if (!list.length) return `<div class="text-[12.5px] text-neutral-500 flex items-center gap-2 px-3 py-2.5 rounded-lg bg-neutral-50 border border-neutral-200"><i data-lucide="info" class="w-4 h-4" style="color:#0f766e"></i> ${emptyText}</div>`;
+    return `<div class="space-y-1.5">` + list.map((b) => `
+      <button onclick="openBkModal(BOOKINGS[${BOOKINGS.indexOf(b)}])" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-left transition">
+        <i data-lucide="user" class="w-4 h-4 text-teal-600 shrink-0"></i>
+        <span class="text-[13px] font-medium truncate">${b.guest}</span>
+        <span class="text-[12px] text-neutral-400 truncate ml-auto">${OBJECTS[b.obj].name}</span>
+      </button>`).join('') + `</div>`;
+  }
+
+  // источники броней (OTA-сплит) — все полосы в бренд-tealʼах, без радуги
+  function channelsBody() {
+    const rows = [['Авито', 42, '#0d9488'], ['Суточно.ру', 28, '#14b8a6'], ['Островок', 18, '#2dd4bf'], ['Напрямую', 12, '#99f6e4']];
+    return `<div class="space-y-2.5">` + rows.map(([n, p, c]) => `
+      <div class="flex items-center gap-2.5 text-[12.5px]">
+        <span class="w-24 shrink-0 text-neutral-600 truncate">${n}</span>
+        <div class="flex-1 h-2 rounded-full bg-neutral-100 overflow-hidden"><div style="width:${p}%;background:${c}" class="h-full rounded-full"></div></div>
+        <span class="mono w-9 text-right text-neutral-700">${p}%</span>
+      </div>`).join('') + `</div>`;
+  }
+
+  // состояние замков — статус severity-бейджем
+  function locksBody() {
+    const rows = [['Тверская 15', 'онлайн · 85%', 'emerald'], ['Бизнес-Центр', 'онлайн · 72%', 'emerald'], ['Загородный дом', 'офлайн', 'red'], ['Невский 8', 'код не загружен', 'red'], ['Арбат 24', 'низкий заряд · 18%', 'amber']];
+    const tone = { emerald: ['bg-emerald-50', 'text-emerald-700', 'bg-emerald-500'], amber: ['bg-amber-50', 'text-amber-700', 'bg-amber-500'], red: ['bg-red-50', 'text-red-700', 'bg-red-500'] };
+    return `<div class="space-y-1.5">` + rows.map(([n, s, t]) => { const [bg, tx, d] = tone[t]; return `
+      <button onclick="openLockModal('${n}','${s}','${t}')" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-left transition">
+        <i data-lucide="lock" class="w-4 h-4 text-neutral-500 shrink-0"></i>
+        <span class="text-[13px] font-medium truncate">${n}</span>
+        <span class="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${bg} ${tx}"><span class="w-1.5 h-1.5 rounded-full ${d}"></span>${s}</span>
+      </button>`; }).join('') + `</div>`;
+  }
+
+  // тело виджета-шахматки (снапшот, разворачивается в модалку / открывается в Календаре)
+  function boardBody() {
+    return `
+    <div class="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <div class="flex items-center rounded-lg border border-neutral-200 overflow-hidden">
+          <button onclick="shift(-7)" class="w-8 h-8 grid place-items-center hover:bg-neutral-100 text-neutral-500"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <button onclick="goToday()" class="px-2.5 h-8 text-[12px] font-medium border-x border-neutral-200 hover:bg-neutral-100">Сегодня</button>
+          <button onclick="shift(7)" class="w-8 h-8 grid place-items-center hover:bg-neutral-100 text-neutral-500"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+        </div>
+        <span id="period" class="text-[12px] font-medium mono text-neutral-500"></span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openModal()" title="Развернуть" class="w-8 h-8 grid place-items-center rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
+        <button onclick="goScreen('calendar')" class="flex items-center gap-1.5 text-[12px] font-medium px-2.5 h-8 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-600"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> В календарь</button>
+      </div>
+    </div>
+    <!-- легенда слева на белом — 5 пунктов (единый скелет с Календарём, #8) -->
+    <div class="scoreboard-legend flex items-center gap-x-4 gap-y-1.5 mb-2.5 flex-wrap text-[11.5px] text-neutral-600">
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300"></span> Подтверждена</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-200 border border-amber-300"></span> Предоплата</span>
+      <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-neutral-200 border border-neutral-300"></span> Новая / OTA</span>
+      <span class="inline-flex items-center gap-1.5"><i data-lucide="users" class="w-3.5 h-3.5 text-teal-600"></i> Совместная бронь</span>
+      <span class="mx-1 text-neutral-300">·</span>
+      <span class="inline-flex items-center gap-1.5">Код: <span class="w-2 h-2 rounded-full bg-emerald-500"></span> загружен <span class="w-2 h-2 rounded-full bg-amber-500"></span> грузится <span class="w-2 h-2 rounded-full bg-red-500"></span> нет</span>
+    </div>
+    <div class="overflow-x-auto"><div id="grid" class="min-w-[860px]"></div></div>`;
+  }
+
+  // РЕЕСТР ВИДЖЕТОВ
+  const WIDGETS = {
+    needs:     { cat: 'Операционные', title: 'Требует решения', icon: 'circle-alert', span: 2, badge: () => '3', render: () => `<div class="space-y-1.5">
+        ${needRow('red', 'message-square-warning', '2 диалога ждут вашего решения', 'AI не уверен в ответе — Анна Морозова и ещё 1', 'Открыть чаты', 'chats')}
+        ${needRow('red', 'key-round', 'Код не загружен в замок', 'Невский 8 · Павел Рогов', 'К замкам', 'locks')}
+        ${needRow('amber', 'wifi-off', 'Замок офлайн с 12:30', 'Загородный дом', 'Проверить', 'locks')}
+      </div>` },
+    checkins:  { cat: 'Операционные', title: 'Заезды сегодня', icon: 'log-in', span: 1, badge: () => String(checkinsToday.length), render: () => arrivalList(checkinsToday, 'Сегодня заездов нет') },
+    checkouts: { cat: 'Операционные', title: 'Выезды сегодня', icon: 'log-out', span: 1, badge: () => String(checkoutsToday.length), render: () => arrivalList(checkoutsToday, 'Сегодня выездов нет') },
+    staying:   { cat: 'Операционные', title: 'Проживают сейчас', icon: 'bed-double', span: 1, badge: () => String(stayingNow.length), render: () => arrivalList(stayingNow, 'Сейчас никто не проживает') },
+    revenue:   { cat: 'Деньги', title: 'Выручка за месяц', icon: 'wallet', span: 1, render: () => statBig('245k', '₽', '+12%', statDonut(0.69, '#0f766e'), '+45k ₽ с допродаж') },
+    upsells:   { cat: 'Деньги', title: 'Допродажи', icon: 'trending-up', span: 1, render: () => statBig('45k', '₽', '+18%', statDonut(0.31, '#10b981'), 'ранний заезд / поздний выезд') },
+    occupancy: { cat: 'Деньги', title: 'Загрузка', icon: 'calendar-check', span: 1, render: () => statBig('72', '%', '+8%', statDonut(0.72, '#0d9488'), '') },
+    adr:       { cat: 'Деньги', title: 'ADR · средний чек', icon: 'receipt', span: 1, render: () => statBig('6 400', '₽', '+4%', statDonut(0.64, '#0d9488'), '') },
+    ai:        { cat: 'Каналы и AI', title: 'AI справляется', icon: 'bot', span: 1, render: () => statBig('78', '%', '+5%', statDonut(0.78, '#0d9488'), 'без эскалации хосту') },
+    channels:  { cat: 'Каналы и AI', title: 'Источники броней', icon: 'share-2', span: 2, render: () => channelsBody() },
+    locksw:    { cat: 'Замки', title: 'Состояние замков', icon: 'lock', span: 2, render: () => locksBody() },
+    board:     { cat: 'Операционные', title: 'Шахматка', icon: 'calendar-range', span: 4, render: () => boardBody(), init: () => { renderGrid('#grid', currentWS, false); attach('#grid'); } },
+    note:      { cat: 'Гибкие', title: 'Заметка', icon: 'sticky-note', span: 1, render: () => `<textarea placeholder="Напоминание себе…" class="w-full h-24 text-[13px] resize-none rounded-lg border border-neutral-200 p-2.5 focus:outline-none focus:border-teal-600"></textarea>` },
+  };
+
+  const DEFAULT_WIDGETS = ['needs', 'checkins', 'checkouts', 'revenue', 'occupancy', 'board'];
+  let activeWidgets = JSON.parse(localStorage.getItem('h24_widgets') || 'null') || DEFAULT_WIDGETS.slice();
+  function saveWidgets() { localStorage.setItem('h24_widgets', JSON.stringify(activeWidgets)); }
+
+  function widgetCard(key) {
+    const w = WIDGETS[key];
+    const badge = w.badge ? `<span class="mono text-[11px] font-semibold px-1.5 rounded-full bg-neutral-100 text-neutral-600">${w.badge()}</span>` : '';
+    return `<div class="dash-widget bg-white rounded-xl border border-neutral-200 shadow-sm col-span-${w.span}" data-wkey="${key}">
+      <div class="wdrag flex items-center gap-2 px-4 py-2.5 border-b border-neutral-100 cursor-grab active:cursor-grabbing">
+        <i data-lucide="grip-vertical" class="grip w-3.5 h-3.5 text-neutral-300 shrink-0"></i>
+        <i data-lucide="${w.icon}" class="w-[17px] h-[17px] text-teal-600 shrink-0"></i>
+        <h2 class="text-[13px] font-semibold truncate">${w.title}</h2>
+        ${badge}
+        <button onclick="removeWidget('${key}')" title="Убрать виджет" class="ml-auto w-6 h-6 grid place-items-center rounded text-neutral-300 hover:bg-neutral-100 hover:text-neutral-600 shrink-0"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+      </div>
+      <div class="p-4 cursor-pointer" onclick="widgetClick(event,'${key}')">${w.render()}</div>
+    </div>`;
+  }
+  // #7: клик по виджету → модалка быстрого просмотра (не переход в раздел)
+  const WIDGET_SCREEN = { needs:'chats', checkins:'calendar', checkouts:'calendar', staying:'calendar', revenue:'analytics', upsells:'analytics', occupancy:'analytics', adr:'analytics', ai:'analytics', channels:'analytics', locksw:'locks' };
+  function widgetClick(e, key){
+    // клик по кнопке внутри виджета (Сегодня/стрелки) перерисовывает грид → lucide пересоздаёт иконки
+    // и отрывает e.target от кнопки. Если узел уже не в документе — это был клик по интерактиву, выходим.
+    if (!document.contains(e.target)) return;
+    // не перехватываем явные интерактивные элементы внутри виджета
+    if (e.target.closest('button, a, input, textarea, select, .tgl, .seg, .obj-cell, .cal-header, .cell-bg')) return;
+    if (key === 'board') { openModal(); return; }   // у шахматки своя модалка-разворот
+    if (key === 'note') return;                      // заметка — поле ввода
+    openWidgetQuick(key);
+  }
+  function openWidgetQuick(key){
+    const w = WIDGETS[key];
+    document.getElementById('wqIcon').setAttribute('data-lucide', w.icon);
+    document.getElementById('wqTitle').textContent = w.title;
+    document.getElementById('wqBody').innerHTML = w.render();
+    const scr = WIDGET_SCREEN[key];
+    document.getElementById('wqFoot').innerHTML = scr
+      ? `<button onclick="closeWq();goScreen('${scr}')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="external-link" class="w-4 h-4"></i> Перейти в раздел</button>`
+      : '';
+    const m=document.getElementById('wqModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeWq(){ const m=document.getElementById('wqModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  // модалка замка (клик по строке в «Состояние замков») — как привязанный замок в разделе Замки
+  function openLockModal(name, status, tone){
+    const map={ emerald:['bg-emerald-50','text-emerald-700','bg-emerald-500'], amber:['bg-amber-50','text-amber-700','bg-amber-500'], red:['bg-red-50','text-red-700','bg-red-500'] };
+    const [bg,tx,d]=map[tone]||map.emerald;
+    document.getElementById('lmHead').innerHTML=`<div class="flex items-center gap-2.5">
+      <span class="w-9 h-9 rounded-lg bg-teal-50 grid place-items-center shrink-0"><i data-lucide="lock" class="w-[18px] h-[18px] text-teal-600"></i></span>
+      <div class="min-w-0 flex-1"><div class="text-[15px] font-semibold truncate">${name}</div><div class="text-[12px] text-neutral-400">Привязан к объекту</div></div>
+      <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${bg} ${tx}"><span class="w-1.5 h-1.5 rounded-full ${d}"></span>${status}</span>
+    </div>`;
+    document.getElementById('lmBody').innerHTML=`<div class="text-[12.5px] text-neutral-500">Быстрые действия по замку. Управление кодами и привязкой — в разделе «Замки».</div>`;
+    const m=document.getElementById('lockModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeLockModal(){ const m=document.getElementById('lockModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+
+  function renderDashboard() {
+    const host = document.getElementById('dashboard');
+    if (!activeWidgets.length) {
+      host.innerHTML = `<div class="col-span-4 grid place-items-center py-16 text-center">
+        <i data-lucide="layout-grid" class="w-10 h-10 text-neutral-300 mb-3"></i>
+        <div class="text-[14px] font-medium text-neutral-600">Дашборд пуст</div>
+        <div class="text-[12.5px] text-neutral-400 mb-4">Добавьте виджеты из библиотеки</div>
+        <button onclick="openWidgetLib()" class="flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-lg bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="plus" class="w-4 h-4"></i> Виджет</button>
+      </div>`;
+      lucide.createIcons(); return;
+    }
+    host.innerHTML = activeWidgets.map(widgetCard).join('');
+    lucide.createIcons();
+    activeWidgets.forEach((k) => { if (WIDGETS[k].init) WIDGETS[k].init(); });
+    wireWidgetDrag();
+  }
+
+  function removeWidget(key) { activeWidgets = activeWidgets.filter((k) => k !== key); saveWidgets(); renderDashboard(); toast('Виджет убран', 'info'); }
+  function addWidget(key) { if (!activeWidgets.includes(key)) { activeWidgets.push(key); saveWidgets(); renderDashboard(); toast('Виджет добавлен', 'success'); } renderWidgetLib(); }
+  function resetWidgets() { activeWidgets = DEFAULT_WIDGETS.slice(); saveWidgets(); renderDashboard(); toast('Дашборд сброшен к стандартному набору', 'info'); }
+
+  function openWidgetLib() { renderWidgetLib(); document.getElementById('widgetLib').classList.remove('hidden'); }
+  function closeWidgetLib() { document.getElementById('widgetLib').classList.add('hidden'); }
+  function renderWidgetLib() {
+    const cats = {};
+    Object.entries(WIDGETS).forEach(([k, w]) => { (cats[w.cat] = cats[w.cat] || []).push([k, w]); });
+    document.getElementById('widgetLibBody').innerHTML = Object.entries(cats).map(([cat, items]) => `
+      <div>
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-2">${cat}</div>
+        <div class="grid grid-cols-2 gap-2">
+          ${items.map(([k, w]) => { const on = activeWidgets.includes(k); return `
+            <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${on ? 'border-teal-600 bg-white' : 'border-neutral-200'}">
+              <i data-lucide="${w.icon}" class="w-[18px] h-[18px] ${on ? 'text-teal-700' : 'text-neutral-500'} shrink-0"></i>
+              <span class="text-[13px] font-medium truncate">${w.title}</span>
+              ${on
+                ? `<button onclick="removeWidget('${k}');renderWidgetLib()" class="ml-auto text-[12px] font-medium text-emerald-600 flex items-center gap-1 shrink-0"><i data-lucide="check" class="w-3.5 h-3.5"></i> добавлен</button>`
+                : `<button onclick="addWidget('${k}')" class="ml-auto text-[12px] font-medium text-teal-700 hover:text-teal-800 flex items-center gap-1 shrink-0"><i data-lucide="plus" class="w-3.5 h-3.5"></i> добавить</button>`}
+            </div>`; }).join('')}
+        </div>
+      </div>`).join('');
+    lucide.createIcons();
+  }
+
+  // drag-reorder виджетов — pointer-based с placeholder'ом: пунктирная зона показывает,
+  // КУДА встанет виджет (в т.ч. в свободную область в конце), а не обводит соседа для обмена.
+  function wireWidgetDrag() {
+    const host = document.getElementById('dashboard');
+    host.querySelectorAll('.dash-widget').forEach((el) => {
+      const handle = el.querySelector('.wdrag');
+      if (!handle) return;
+      handle.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || e.target.closest('button, a, textarea, input')) return;
+        e.preventDefault();
+        const startKey = el.dataset.wkey;
+        document.body.style.userSelect = 'none';
+        // плейсхолдер-зона вставки (того же размера, что перетаскиваемый виджет)
+        const ph = document.createElement('div');
+        ph.className = 'rounded-xl border-2 border-dashed border-teal-500 bg-teal-50/60 col-span-' + WIDGETS[startKey].span;
+        ph.style.minHeight = el.offsetHeight + 'px';
+        host.insertBefore(ph, el);
+        el.remove();                         // вынимаем виджет из потока — остаётся только зона
+
+        const place = (x, y) => {
+          const cards = [...host.querySelectorAll('.dash-widget')];
+          // ищем первую карточку, которая по reading-order (слева-направо, сверху-вниз)
+          // должна идти ПОСЛЕ курсора → перед ней ставим плейсхолдер.
+          let beforeEl = null;
+          for (const c of cards) {
+            const r = c.getBoundingClientRect();
+            const inRow = y >= r.top && y <= r.bottom;
+            if (y < r.top || (inRow && x < r.left + r.width / 2)) { beforeEl = c; break; }
+          }
+          if (beforeEl) host.insertBefore(ph, beforeEl);
+          else host.appendChild(ph);                                   // правее/ниже всех → в конец
+        };
+        place(e.clientX, e.clientY);
+
+        const onMove = (ev) => place(ev.clientX, ev.clientY);
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          document.body.style.userSelect = '';
+          // новый порядок: позиция плейсхолдера = новое место виджета
+          activeWidgets = [...host.children].map((c) => c === ph ? startKey : c.dataset.wkey).filter(Boolean);
+          saveWidgets(); renderDashboard();
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  }
+
+  // статусы броней + шахматка (то же что в B4)
+  const STATUS = {
+    confirmed: 'bg-emerald-100 text-emerald-900 border border-emerald-300',
+    prepay:    'bg-amber-100 text-amber-900 border border-amber-300',
+    ota:       'bg-neutral-100 text-neutral-700 border border-neutral-300',
+  };
+  const codeDot = { loaded:'bg-emerald-500', loading:'bg-amber-500', notloaded:'bg-red-500' };
+  const fmtPrice = (n) => n.toLocaleString('ru-RU');
+
+  // Выделение карточки по клику: снимаем выделение с соседей в группе, ставим на текущую (single-select, как диалоги в чатах)
+  function selectCard(el, groupSel) {
+    document.querySelectorAll(groupSel + ' > div').forEach((c) => c.classList.remove('card-sel'));
+    el.classList.add('card-sel');
+  }
+
+  function toast(msg, type) {
+    const icons = { success: ['check-circle', '#34d399'], warn: ['alert-triangle', '#fbbf24'], error: ['alert-circle', '#f87171'], info: ['info', '#5eead4'] };
+    const [ic, col] = icons[type] || icons.info;
+    const el = document.getElementById('toast');
+    el.innerHTML = `<i data-lucide="${ic}" class="w-4 h-4" style="color:${col}"></i><span>${msg}</span>`;
+    el.classList.remove('hidden'); lucide.createIcons();
+    clearTimeout(window._tt); window._tt = setTimeout(() => el.classList.add('hidden'), 2600);
+  }
+
+  function renderGrid(sel, ws, big) {
+    const days = genDays(ws);
+    const rowH = big ? 'h-9' : 'h-12';   // разворот — компактные строки (плотный вид как в Календаре)
+    const nameW = big ? 200 : 188;
+    const todayIdx = days.findIndex((d) => d.today);
+
+    let h = `<div class="cal-header flex border-b border-neutral-200 text-center sticky top-0 bg-white z-10 select-none">
+      <div class="scoreboard-namecol-header shrink-0 px-3 py-2 text-[11px] font-medium text-neutral-400 text-left" style="width:${nameW}px">Объект</div>
+      <div class="flex-1 grid" style="grid-template-columns:repeat(14,1fr)">`;
+    days.forEach((d) => {
+      h += `<div class="py-1.5 ${d.today ? 'bg-bordo/5' : d.weekend ? 'bg-neutral-100' : ''}">
+        <div class="mono text-[14px] leading-none ${d.today ? 'font-bold text-bordo' : 'font-semibold text-neutral-700'}">${d.day}</div>
+        <div class="text-[9.5px] uppercase tracking-wide mt-0.5 ${d.today ? 'text-bordo font-semibold' : 'text-neutral-400'}">${d.today ? 'сег' : d.wd}</div>
+      </div>`;
+    });
+    h += `</div></div>`;
+
+    // строка одного объекта (вынесена — переиспользуется в плоском и сгруппированном режиме)
+    const objRow = (o, oi) => {
+      const segs = layoutSegments(oi, ws);
+      let r = `<div class="flex border-b border-neutral-100 last:border-b-0">
+        <button title="Открыть объект ${o.name}" data-obj="${oi}" class="obj-cell shrink-0 px-3 ${rowH} flex flex-col justify-center text-left hover:bg-neutral-50 border-r border-neutral-100" style="width:${nameW}px">
+          <div class="text-[13px] font-medium text-neutral-800 truncate leading-snug">${o.name}</div>
+          ${big ? '' : `<div class="text-[11px] text-neutral-400 truncate leading-snug">${o.sub}</div>`}
+        </button>
+        <div class="relative flex-1 ${rowH}" data-objrow="${oi}">`;
+      r += `<div class="absolute inset-0 grid" style="grid-template-columns:repeat(14,1fr)">`;
+      days.forEach((d) => {
+        r += `<div data-obj="${oi}" data-off="${d.off}" title="Добавить бронь · ${d.day} ${MONTHS[d.month]}" class="cell-bg relative group border-r border-neutral-100 last:border-r-0 ${d.today ? 'bg-bordo/5' : d.weekend ? 'bg-neutral-50' : ''}">
+          <span class="opacity-0 group-hover:opacity-100 absolute inset-0 grid place-items-center text-neutral-300 pointer-events-none"><i data-lucide="plus" class="w-3.5 h-3.5"></i></span>
+        </div>`;
+      });
+      r += `</div>`;
+      segs.forEach((s) => {
+        const b = s.booking;
+        const left = (s.l0 + (s.isStart ? 0.5 : 0)) / 14 * 100;
+        const right = (s.l1 + 1 - (s.isEnd ? 0.5 : 0)) / 14 * 100;
+        const w = right - left;
+        const radius = `${s.isStart ? 'rounded-l-md' : ''} ${s.isEnd ? 'rounded-r-md' : ''}`;
+        const codeText   = { loaded:'text-emerald-800', loading:'text-amber-800', notloaded:'text-red-700' }[b.code];
+        const codeBg     = { loaded:'bg-emerald-50/70', loading:'bg-amber-50/70', notloaded:'bg-red-50/70' }[b.code];
+        const codeBorder = { loaded:'border border-emerald-400', loading:'border border-amber-400', notloaded:'border border-red-400' }[b.code];
+        const codeHtml = b.codeNum
+          ? `<span class="mono text-[10px] font-bold px-1 rounded-md ml-auto shrink-0 ${codeText} ${codeBg} ${codeBorder}">${b.codeNum}</span>`
+          : '';
+        r += `<div data-bk="${BOOKINGS.indexOf(b)}" title="${b.guest} · ${o.name} · ${fmtPrice(b.price)} ₽ · код ${b.code === 'loaded' ? 'загружен' : b.code === 'loading' ? 'загружается' : 'НЕ загружен'}" class="seg absolute top-1.5 bottom-1.5 ${STATUS[b.status]} ${radius} flex items-center px-1.5 gap-1.5 overflow-hidden cursor-pointer hover:brightness-95 z-[6]" style="left:${left}%;width:${w}%">
+          <span class="w-2 h-2 rounded-full ${codeDot[b.code]} shrink-0 ring-1 ring-white/60" title="статус кода"></span>
+          <span class="truncate text-[11.5px] font-medium leading-none">${b.guest}</span>
+          ${codeHtml}
+          <span class="mono text-[10px] opacity-60 shrink-0">${fmtPrice(b.price)} ₽</span>
+        </div>`;
+      });
+      r += `</div></div>`;
+      return r;
+    };
+
+    if (big) {
+      // РАЗВОРОТ — новый вид как в Календаре: группировка по «Пространствам» + компактные строки
+      const order = []; OBJECTS.forEach((o) => { if (!order.includes(o.space)) order.push(o.space); });
+      order.forEach((space) => {
+        const items = OBJECTS.map((o, i) => ({ o, i })).filter((x) => x.o.space === space);
+        if (!items.length) return;
+        h += `<div class="flex items-stretch border-b border-neutral-200 bg-neutral-100/80" style="height:28px">
+          <div class="shrink-0 px-3 flex items-center gap-1.5" style="width:${nameW}px"><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400 shrink-0"></i><span class="text-[12px] font-semibold text-neutral-700 truncate">${space}</span><span class="mono text-[11px] text-neutral-400 ml-1 shrink-0">${items.length}</span></div>
+          <div class="flex-1 bg-neutral-100/50"></div>
+        </div>`;
+        items.forEach(({ o, i }) => h += objRow(o, i));
+      });
+    } else {
+      OBJECTS.forEach((o, oi) => h += objRow(o, oi));
+    }
+
+    document.querySelector(sel).innerHTML = h;
+    const d0 = days[0], d13 = days[13];
+    const pEl = document.getElementById(big ? 'periodModal' : 'period');
+    if (pEl) pEl.textContent = `${d0.day} ${MONTHS[d0.month]} — ${d13.day} ${MONTHS[d13.month]}`;
+    lucide.createIcons();
+  }
+
+  function rerender() {
+    renderGrid('#grid', currentWS, false);
+    if (!document.getElementById('modal').classList.contains('hidden')) renderGrid('#gridModal', currentWS, true);
+  }
+  function shift(d) { currentWS += d; rerender(); }
+  function goToday() { currentWS = 0; rerender(); }
+  let modalAttached = false;
+  function openModal() { document.getElementById('modal').classList.remove('hidden'); renderGrid('#gridModal', currentWS, true); if (!modalAttached) { attach('#gridModal'); modalAttached = true; } }
+  function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+  // ── модалки брони/объекта из шахматки (единый скелет с Календарём) ──
+  const ST_LABEL = { confirmed:'Подтверждена', prepay:'Предоплата', ota:'Новая · OTA' };
+  const ST_DOT   = { confirmed:'bg-emerald-500', prepay:'bg-amber-500', ota:'bg-neutral-400' };
+  const ST_CHIP  = { confirmed:'bg-emerald-50 text-emerald-700', prepay:'bg-amber-50 text-amber-700', ota:'bg-neutral-100 text-neutral-700' };
+  const CH_MAP   = { max:'MAX', tg:'TG', wa:'WA', web:'Веб' };
+  function fmtOff(off){ const d=new Date(BASE); d.setDate(BASE.getDate()+off); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+  function pluralRu(n,one,few,many){ const a=n%10,b=n%100; if(a===1&&b!==11)return one; if(a>=2&&a<=4&&(b<10||b>=20))return few; return many; }
+  function bkSection(title, ic, bodyHtml){ return `<div class="rounded-xl border border-neutral-200 p-4"><div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="${ic}" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">${title}</span></div>${bodyHtml}</div>`; }
+  function bkKv(label,val){ return `<div class="flex justify-between gap-4 py-1.5 border-b border-neutral-100 last:border-0"><span class="text-[12.5px] text-neutral-500 shrink-0">${label}</span><span class="text-[13px] text-right text-neutral-800">${val}</span></div>`; }
+  function bkHistory(b){
+    const ev=[
+      {ic:'calendar-plus',tone:'neutral',t:'Создана',txt:`Из «${b.src}» · ${fmtOff(b.start)} – ${fmtOff(b.end)}`},
+      {ic:'message-square',tone:'teal',t:'Приветствие',txt:`AI отправил приветствие в ${CH_MAP[b.ch]}`},
+    ];
+    if(b.code==='loaded') ev.push({ic:'key-round',tone:'emerald',t:'Код выдан',txt:`Код ${b.codeNum||''} загружен в замок`});
+    if(b.start<=0 && 0<b.end) ev.push({ic:'log-in',tone:'emerald',t:'Заезд',txt:'Гость заехал — код активирован'});
+    return `<div class="space-y-2.5">${ev.reverse().map((e)=>`<div class="flex gap-2.5"><div class="w-7 h-7 rounded-lg bg-${e.tone}-50 grid place-items-center shrink-0"><i data-lucide="${e.ic}" class="w-3.5 h-3.5 text-${e.tone}-600"></i></div><div><div class="text-[12.5px] font-medium">${e.t}</div><div class="text-[12px] text-neutral-500">${e.txt}</div></div></div>`).join('')}</div>`;
+  }
+  // полная карточка брони — идентична Календарю
+  function openBkModal(b){
+    if(!b) return;
+    const o=OBJECTS[b.obj], cs=b.code;
+    const csLbl={loaded:'Загружен в замок',loading:'Загружается…',notloaded:'Не загружен'}[cs];
+    const csCol=cs==='loaded'?'text-emerald-700':cs==='loading'?'text-amber-600':'text-red-600';
+    document.getElementById('bkmHead').innerHTML = `<div class="flex items-start gap-2">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <h2 class="text-[18px] font-bold tracking-tight truncate">${b.guest}</h2>
+          <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${ST_CHIP[b.status]}"><span class="w-1.5 h-1.5 rounded-full ${ST_DOT[b.status]}"></span>${ST_LABEL[b.status]}</span>
+        </div>
+        <p class="text-[12.5px] text-neutral-500 mt-0.5">${o.name} · ${fmtOff(b.start)} – ${fmtOff(b.end)} · ${nightsB(b)} ${pluralRu(nightsB(b),'ночь','ночи','ночей')} · ${b.src}</p>
+      </div>
+      <button onclick="closeBkModal()" class="w-8 h-8 grid place-items-center rounded-md hover:bg-neutral-100 text-neutral-500 shrink-0"><i data-lucide="x" class="w-[18px] h-[18px]"></i></button>
+    </div>`;
+    const codeBlock = `<div class="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-3 text-center mb-2.5">
+        <div class="text-[28px] font-bold mono tracking-wide ${csCol}">${b.codeNum||'• • • •'}</div>
+        <div class="inline-flex items-center gap-1.5 mt-1 text-[12px] font-medium ${csCol}"><span class="w-2 h-2 rounded-full ${codeDot[cs]}"></span>${csLbl}</div>
+      </div>
+      ${bkKv('Назначение','Гостевой')}${bkKv('Тип кода','Временный')}
+      ${bkKv('Действует','<span class="mono">'+fmtOff(b.start)+' – '+fmtOff(b.end)+'</span>')}
+      ${bkKv('Устройство','TTLock · Входная дверь')}
+      <button onclick="toast('Код отправлен гостю в ${CH_MAP[b.ch]}')" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="send" class="w-3.5 h-3.5"></i> Отправить код гостю</button>`;
+    document.getElementById('bkmBody').innerHTML = `
+      <div class="grid sm:grid-cols-2 gap-3">
+        ${bkSection('Гость','user', bkKv('Телефон','<span class="mono">'+b.phone+'</span>')+bkKv('Канал связи','<span class="text-[11px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">'+CH_MAP[b.ch]+'</span>')+bkKv('Гостей', b.guests+' '+pluralRu(b.guests,'гость','гостя','гостей'))+bkKv('Источник', b.src)+'<button onclick="toast(\'Карточка гостя — все брони и переписки\')" class="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Карточка гостя</button>')}
+        ${bkSection('Даты','calendar', bkKv('Объект', o.name)+bkKv('Заезд','<span class="mono">'+fmtOff(b.start)+'</span> с 14:00')+bkKv('Выезд','<span class="mono">'+fmtOff(b.end)+'</span> до 12:00')+bkKv('Ночей', nightsB(b)))}
+        ${bkSection('Оплата','wallet', bkKv('Статус оплаты', b.paid)+bkKv('Сумма', b.price?'<span class="mono font-semibold">'+fmtPrice(b.price)+' ₽</span>':'—')+'<div class="mt-2.5 flex flex-col gap-2"><button onclick="toast(\'Счёт на доплату через ЮKassa\')" class="inline-flex items-center justify-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-md border border-neutral-200 hover:border-teal-700 text-neutral-700"><i data-lucide="receipt" class="w-4 h-4 text-teal-600"></i> Счёт на доплату</button><button onclick="toast(\'Допродажа: поздний выезд\')" class="inline-flex items-center justify-center gap-1.5 text-[12.5px] font-medium px-3 py-2 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-400"><i data-lucide="trending-up" class="w-4 h-4"></i> Предложить поздний выезд</button></div>')}
+        ${bkSection('Код замка','key-round', codeBlock)}
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3 mt-3">
+        ${bkSection('Переписка','message-square','<div class="space-y-2"><div class="flex justify-start"><div class="max-w-[85%] bg-neutral-100 rounded-2xl rounded-bl-sm px-3 py-2 text-[12.5px]">Здравствуйте! Во сколько можно заехать?</div></div><div class="flex justify-end"><div class="max-w-[85%] bg-teal-700 text-white rounded-2xl rounded-br-sm px-3 py-2 text-[12.5px]">Заезд с 14:00. Код пришлю утром в день заезда</div></div></div><button onclick="toast(\'Открываю диалог в Чатах\')" class="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-teal-700 hover:underline"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Весь диалог в Чатах</button>')}
+        ${bkSection('История','history', bkHistory(b))}
+      </div>`;
+    document.getElementById('bkmFoot').innerHTML = `
+      <button onclick="toast('Открываю диалог в Чатах')" class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-4 py-2.5 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="message-square" class="w-4 h-4"></i> Открыть чат</button>
+      <button onclick="toast('Ссылка на бронь скопирована')" class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-3 py-2.5 rounded-md border border-neutral-200 text-neutral-600 hover:border-teal-700"><i data-lucide="link" class="w-4 h-4"></i> Ссылка</button>
+      <button onclick="goScreen('calendar')" class="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium px-3 py-2.5 rounded-md border border-neutral-200 text-neutral-500 hover:border-teal-700"><i data-lucide="external-link" class="w-4 h-4"></i> В календарь</button>`;
+    const m=document.getElementById('bkModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function nightsB(b){ return b.end - b.start; }
+  function closeBkModal(){ const m=document.getElementById('bkModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  // создание брони выделением ячеек → карточка создания (как openCreate в Календаре)
+  let createCtx=null;
+  function openCreateHome(objIdx, startOff, endOff){
+    createCtx={ objIdx, startOff, endOff };
+    document.getElementById('ch_obj').innerHTML=OBJECTS.map((o,i)=>`<option value="${i}" ${i===objIdx?'selected':''}>${o.name}</option>`).join('');
+    document.getElementById('ch_in').value=fmtOff(startOff);
+    document.getElementById('ch_out').value=fmtOff(endOff);
+    document.getElementById('ch_guest').value=''; document.getElementById('ch_phone').value=''; document.getElementById('ch_guests').value=2;
+    const m=document.getElementById('createModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+    setTimeout(()=>document.getElementById('ch_guest').focus(),50);
+  }
+  function closeCreateHome(){ const m=document.getElementById('createModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  function submitCreateHome(){
+    const g=(document.getElementById('ch_guest').value||'').trim()||'Новый гость';
+    const oi=+document.getElementById('ch_obj').value;
+    BOOKINGS.push({ obj:oi, start:createCtx.startOff, end:createCtx.endOff, guest:g, price:0, status:'prepay', code:'notloaded', codeNum:'',
+      phone:(document.getElementById('ch_phone').value||'').trim()||'—', ch:'tg', guests:+document.getElementById('ch_guests').value||1, src:'Прямая', paid:'ожидает оплату' });
+    closeCreateHome(); rerender(); toast('Бронь создана: '+g, 'success');
+  }
+  function objCurrentNext(oi){
+    const bs=BOOKINGS.filter(b=>b.obj===oi).sort((a,b)=>a.start-b.start);
+    const cur=bs.find(b=> b.start<=0 && 0<b.end);
+    const next=bs.find(b=> b.start>0);
+    return { cur, next };
+  }
+  let curObjId = null;   // для деплинка в экран «Объекты»
+  function openObjModal(oi){
+    const o=OBJECTS[oi]; if(!o) return;
+    curObjId = o.id;
+    const statusBadge = o.status==='pub'
+      ? '<span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Опубликован</span>'
+      : '<span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Черновик</span>';
+    document.getElementById('omHead').innerHTML = `
+      <div class="flex items-start gap-2.5">
+        <span class="w-10 h-10 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-5 h-5 text-neutral-500"></i></span>
+        <div class="min-w-0 flex-1"><div class="text-[16px] font-bold truncate">${o.name}</div><div class="text-[12px] text-neutral-400 truncate">${o.addr}</div></div>
+        ${statusBadge}
+      </div>`;
+    const { cur, next } = objCurrentNext(oi);
+    const line=(b,label,tone)=>`<div class="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2">
+      <span class="w-2 h-2 rounded-full ${ST_DOT[b.status]} shrink-0"></span>
+      <div class="min-w-0 flex-1"><div class="text-[12.5px] font-medium truncate">${b.guest}</div><div class="text-[11px] text-neutral-400">${fmtOff(b.start)} – ${fmtOff(b.end)} · ${fmtPrice(b.price)} ₽</div></div>
+      <span class="text-[10.5px] font-medium px-1.5 py-0.5 rounded ${tone} shrink-0">${label}</span></div>`;
+    let bks='';
+    if(cur) bks+=line(cur,'сейчас здесь','bg-emerald-50 text-emerald-700');
+    if(next) bks+=line(next,'следующая','bg-neutral-100 text-neutral-600');
+    if(!cur&&!next) bks='<div class="text-[12px] text-neutral-400 py-1">Нет активных и будущих броней</div>';
+    // read-only «Информация» как 1-я вкладка экрана Объекты
+    document.getElementById('omBody').innerHTML = `
+      <div class="rounded-xl border border-neutral-200 p-4">
+        <div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="info" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">Информация</span></div>
+        ${bkKv('Пространство', o.space)}${bkKv('Тип', o.type)}${bkKv('Комнат', o.rooms)}${bkKv('Площадь', o.area)}${bkKv('Адрес', o.addr)}
+      </div>
+      <div class="rounded-xl border border-neutral-200 p-4 mt-3">
+        <div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="calendar" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">Брони</span></div>
+        <div class="space-y-2">${bks}</div>
+      </div>`;
+    const m=document.getElementById('objModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
+  }
+  function closeObjModal(){ const m=document.getElementById('objModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+  // деплинк: открыть экран «Объекты» сразу на карточке этого объекта (для редактирования)
+  function openObjDeep(){ try{ if(window.top) window.top.__openObjectId = curObjId; }catch(e){} closeObjModal(); goScreen('objects'); }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeBkModal(); closeObjModal(); closeWq(); closeLockModal(); closeCreateHome(); } });
+
+  // drag-select + pan (то же что в B4)
+  let sel = null, pan = null;
+  function clearHL(root) { root.querySelectorAll('.cell-bg.ring-2').forEach((c) => c.classList.remove('ring-2', 'ring-inset', 'ring-teal-400', 'bg-teal-50')); }
+  function hl(root) {
+    clearHL(root);
+    if (!sel) return;
+    const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
+    root.querySelectorAll(`.cell-bg[data-obj="${sel.obj}"]`).forEach((c) => {
+      const off = +c.dataset.off;
+      if (off >= lo && off <= hi) c.classList.add('ring-2', 'ring-inset', 'ring-teal-400', 'bg-teal-50');
+    });
+  }
+  let mv = null;  // перетаскивание брони (seg-move): { bk, sx, sy, el, moved }
+  function attach(rootSel) {
+    const root = document.querySelector(rootSel);
+    root.addEventListener('mousedown', (e) => {
+      const header = e.target.closest('.cal-header');
+      const cell = e.target.closest('.cell-bg');
+      const obj = e.target.closest('.obj-cell');
+      const seg = e.target.closest('.seg');
+      if (seg) {  // начать возможное перетаскивание брони (порог в mousemove)
+        mv = { bk: BOOKINGS[+seg.dataset.bk], sx: e.clientX, sy: e.clientY, el: seg, moved: false };
+        e.preventDefault(); e.stopPropagation(); return;
+      }
+      if (header) {
+        const daysArea = header.querySelector('.grid');
+        pan = { startX: e.clientX, startWS: currentWS, cellW: daysArea.offsetWidth / 14 };
+        e.preventDefault();
+      } else if (cell) {
+        // drag по телу = листание окна (как за шапку дат); клик без движения = создать бронь
+        const daysArea = root.querySelector('.cal-header .grid');
+        pan = { startX: e.clientX, startWS: currentWS, cellW: (daysArea ? daysArea.offsetWidth : 840) / 14,
+                moved: false, pending: { obj: +cell.dataset.obj, off: +cell.dataset.off } };
+        e.preventDefault();
+      } else if (obj) {
+        openObjModal(+obj.dataset.obj);   // #26: клик по адресу → модалка объекта
+      }
+    });
+    root.addEventListener('mousemove', (e) => {
+      if (pan) {
+        const ds = Math.round((pan.startX - e.clientX) / pan.cellW);
+        if (currentWS !== pan.startWS + ds) { pan.moved = true; currentWS = pan.startWS + ds; rerender(); }
+      } else if (sel) {
+        const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.cell-bg');
+        if (cell && +cell.dataset.obj === sel.obj) { sel.b = +cell.dataset.off; hl(sel.root); }
+      }
+    });
+  }
+  // перетаскивание брони — на уровне document (может пересекать строки объектов)
+  document.addEventListener('mousemove', (e) => {
+    if (!mv) return;
+    if (!mv.moved && (Math.abs(e.clientX - mv.sx) > 5 || Math.abs(e.clientY - mv.sy) > 5)) { mv.moved = true; mv.el.classList.add('dragging'); }
+    if (mv.moved) {
+      document.querySelectorAll('.cell-bg.cell-drop').forEach((c) => c.classList.remove('cell-drop'));
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const row = under && under.closest('[data-objrow]');
+      if (row) {
+        // подсвечиваем именно диапазон будущей брони (не всю строку)
+        const cw = row.getBoundingClientRect().width / 14;
+        const delta = Math.round((e.clientX - mv.sx) / cw);
+        const ns = mv.bk.start + delta, dur = mv.bk.end - mv.bk.start;
+        row.querySelectorAll('.cell-bg').forEach((c) => { const off = +c.dataset.off; if (off >= ns && off < ns + dur) c.classList.add('cell-drop'); });
+      }
+    }
+  });
+  document.addEventListener('mouseup', (e) => {
+    // 1) завершение перетаскивания/клика по броне
+    if (mv) {
+      const b = mv.bk;
+      if (!mv.moved) { openBkModal(b); mv = null; return; }   // не двигали → клик → карточка брони
+      mv.el.classList.remove('dragging');
+      document.querySelectorAll('.cell-bg.cell-drop').forEach((c) => c.classList.remove('cell-drop'));
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const row = under && under.closest('[data-objrow]');
+      if (row) {
+        const newObj = +row.getAttribute('data-objrow');
+        const cw = row.getBoundingClientRect().width / 14;
+        const delta = Math.round((e.clientX - mv.sx) / cw);
+        if (newObj !== b.obj || delta) {
+          const dur = b.end - b.start, moved2obj = newObj !== b.obj;
+          b.obj = newObj; b.start += delta; b.end = b.start + dur;
+          rerender();
+          toast(moved2obj ? `Бронь «${b.guest}» → ${OBJECTS[newObj].name}` : `Бронь «${b.guest}» сдвинута`, 'success');
+        }
+      }
+      mv = null; return;
+    }
+    // 2) завершение выделения ячеек → карточка создания брони (sel — fallback, осн. путь теперь pan)
+    if (sel) {
+      const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
+      const root = sel.root, obj = sel.obj; sel = null; clearHL(root);
+      openCreateHome(obj, lo, hi + 1);   // выезд — следующий день после последней выделенной ночи
+    }
+    // 3) завершение pan: клик по пустому дню без листания → создать бронь
+    if (pan) {
+      if (!pan.moved && pan.pending) { openCreateHome(pan.pending.obj, pan.pending.off, pan.pending.off + 1); }
+      pan = null;
+    }
+  });
+
+  renderDashboard();
+  lucide.createIcons();
+  attach('#modal');
+</script>
+</body>
+</html>
