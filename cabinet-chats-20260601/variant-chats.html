@@ -107,7 +107,7 @@
   <!-- SIDEBAR (наследовано из B5) -->
   <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
     <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
-      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">Б</div>
       <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
       <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
         <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
@@ -629,6 +629,8 @@
   renderFilters();
   renderList();
   openDialog('sergey');
+  // mobile: стартуем со СПИСКА диалогов (openDialog ставит m-dialog — снимаем при первичной загрузке)
+  if (window.innerWidth <= 768) document.getElementById('chatWrap').classList.remove('m-dialog');
   lucide.createIcons();
 
   // авто-рост поля ввода: растёт по содержимому до максимума, потом внутренний скролл

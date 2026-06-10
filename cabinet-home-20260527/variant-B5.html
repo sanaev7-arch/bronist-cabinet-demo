@@ -81,9 +81,12 @@
     #kpi { grid-template-columns: repeat(2, 1fr) !important; }
     #addMetric { width: 100% !important; height: 44px !important; }
     .kpi-row { flex-direction: column; }
-    /* Дашборд виджетов — 1 колонка, виджеты на всю ширину */
-    #dashboard { grid-template-columns: 1fr !important; }
-    #dashboard .dash-widget { grid-column: span 1 / span 1 !important; }
+    /* Дашборд виджетов — 1 колонка, виджеты на всю ширину.
+       minmax(0,1fr) + min-width:0 обязательны: виджет «Занятость» содержит шахматку
+       min-w-[860px], и при обычном 1fr грид-трек раздувается до её min-content (890px),
+       растягивая ВСЕ виджеты за правый край экрана. */
+    #dashboard { grid-template-columns: minmax(0, 1fr) !important; }
+    #dashboard .dash-widget { grid-column: span 1 / span 1 !important; min-width: 0 !important; max-width: 100% !important; }
     /* Шахматка: контент горизонтальный скролл, имя объекта sticky left */
     .scoreboard-scroll { overflow-x: auto; }
     .obj-cell, .scoreboard-namecol-header { position: sticky; left: 0; z-index: 4; background: #fff; }
@@ -138,7 +141,7 @@
   <!-- SIDEBAR со свёртыванием -->
   <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
     <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
-      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">Б</div>
       <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
       <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
         <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
