@@ -120,9 +120,10 @@
       padding-left: 8px !important; padding-right: 8px !important;
       box-shadow: 4px 0 6px -4px rgba(0,0,0,0.12);
     }
-    /* шахматка-scroller: только горизонтальный touch внутри, не передавать наверх */
+    /* шахматка-scroller: горизонтальный touch внутри + вертикальный pan отдаём странице
+       (pan-x без pan-y блокировал вертикальный скролл, когда палец на шахматке) */
     div.p-3.overflow-x-auto {
-      touch-action: pan-x;
+      touch-action: pan-x pan-y;
       overscroll-behavior-x: contain;
       -webkit-overflow-scrolling: touch;
     }

@@ -161,7 +161,7 @@
   <!-- SIDEBAR (наследовано из B5) -->
   <aside id="sidebar" class="w-60 shrink-0 border-r border-neutral-200 flex flex-col bg-white transition-[width] duration-200">
     <div class="brand h-16 flex items-center gap-2.5 px-5 border-b border-neutral-200">
-      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">H</div>
+      <div class="brand-logo w-8 h-8 rounded-lg bg-teal-700 text-white grid place-items-center text-[13px] font-bold shrink-0">Б</div>
       <span class="lbl font-bold tracking-tight text-[16px]">Бронист</span>
       <button onclick="toggleSidebar()" title="Свернуть/развернуть" class="ml-auto w-8 h-8 grid place-items-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-teal-700">
         <i data-lucide="panel-left-close" class="ic-collapse w-[18px] h-[18px]"></i>
@@ -318,7 +318,7 @@
                 <span class="inline-flex items-center gap-1.5">Код: <span class="w-2 h-2 rounded-full bg-emerald-500"></span> загружен <span class="w-2 h-2 rounded-full bg-amber-500"></span> грузится <span class="w-2 h-2 rounded-full bg-red-500"></span> нет</span>
               </div>
             </div>
-            <div id="sbScroller" class="sb-scroller" style="touch-action:pan-x; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;">
+            <div id="sbScroller" class="sb-scroller" style="touch-action:pan-x pan-y; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;">
               <div id="sbInner" style="width:100%;"></div>
             </div>
             <p class="sb-tips text-[11.5px] text-neutral-400 px-4 py-2 border-t border-neutral-100">
@@ -361,7 +361,7 @@
     <div id="omBody" class="px-5 py-4 space-y-3"></div>
     <div class="border-t border-neutral-200 px-5 py-3 flex items-center justify-end gap-2">
       <button onclick="closeObjModal()" class="text-[13px] font-medium px-3.5 py-2 rounded-md border border-neutral-200 text-neutral-600 hover:border-neutral-300">Закрыть</button>
-      <button onclick="goScreen('objects')" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="external-link" class="w-4 h-4"></i> Открыть карточку</button>
+      <button onclick="openObjDeep()" class="inline-flex items-center gap-1.5 text-[13px] font-medium px-3.5 py-2 rounded-md bg-teal-700 text-white hover:bg-teal-800"><i data-lucide="pencil" class="w-4 h-4"></i> Открыть и редактировать</button>
     </div>
   </div>
 </div>
@@ -511,13 +511,14 @@
   // ══════════ ДАННЫЕ ══════════
   const TODAY = new Date(2026, 5, 2);
   const D = (y,m,d) => new Date(y, m, d);
+  // type/rooms/area/status — как на Сводке (data2.js): модалка объекта единая на обоих экранах
   const OBJECTS = [
-    { id:'tverskaya', name:'Тверская 15', space:'Центр',  lock:true,     addr:'Москва, ул. Тверская, 15, кв. 48' },
-    { id:'arbat',     name:'Арбат 8',     space:'Центр',  lock:true,     addr:'Москва, ул. Арбат, 8, кв. 12' },
-    { id:'lenina',    name:'Ленина 42',   space:'У метро',lock:true,     addr:'Москва, пр-т Ленина, 42, кв. 91' },
-    { id:'pobedy',    name:'Победы 7',    space:'У метро',lock:'keybox',  addr:'Москва, ул. Победы, 7, кв. 5' },
-    { id:'sadovaya',  name:'Садовая 3',   space:'Центр',  lock:true,     addr:'Москва, ул. Садовая, 3, кв. 120' },
-    { id:'dachnaya',  name:'Дачная 12',   space:'Загород',lock:true,     addr:'МО, пос. Лесной, ул. Дачная, 12' },
+    { id:'tverskaya', name:'Тверская 15', space:'Центр',  lock:true,     addr:'Москва, ул. Тверская, 15, кв. 48', type:'Квартира',    rooms:'2 комнаты', area:'54 м²', status:'pub' },
+    { id:'arbat',     name:'Арбат 8',     space:'Центр',  lock:true,     addr:'Москва, ул. Арбат, 8, кв. 12',     type:'Студия',      rooms:'студия',    area:'32 м²', status:'pub' },
+    { id:'lenina',    name:'Ленина 42',   space:'У метро',lock:true,     addr:'Москва, пр-т Ленина, 42, кв. 91',  type:'Апартаменты', rooms:'2 комнаты', area:'61 м²', status:'pub' },
+    { id:'pobedy',    name:'Победы 7',    space:'У метро',lock:'keybox',  addr:'Москва, ул. Победы, 7, кв. 5',     type:'Квартира',    rooms:'1 комната', area:'38 м²', status:'draft' },
+    { id:'sadovaya',  name:'Садовая 3',   space:'Центр',  lock:true,     addr:'Москва, ул. Садовая, 3, кв. 120',  type:'Квартира',    rooms:'3 комнаты', area:'78 м²', status:'pub' },
+    { id:'dachnaya',  name:'Дачная 12',   space:'Загород',lock:true,     addr:'МО, пос. Лесной, ул. Дачная, 12',  type:'Дом',         rooms:'4 комнаты', area:'96 м²', status:'pub' },
   ];
   // ── демо-масштаб: добавляем объекты в нескольких пространствах, чтобы видеть плотность и группировку как у крупного хоста (~30 объектов) ──
   (function seedObjects(){
@@ -532,7 +533,9 @@
       list.forEach((st) => {
         const lock = (n%7===0) ? 'keybox' : (n%13===0 ? false : true);
         const nm = `${st} ${10+(n*3)%80}`;
-        OBJECTS.push({ id:'gen'+n, name:nm, space, lock, addr:`Москва, ул. ${nm}, кв. ${1+(n*7)%150}` });
+        // детерминированные поля для единой модалки объекта (как на Сводке)
+        const types = [['Квартира','1 комната','38 м²'],['Квартира','2 комнаты','54 м²'],['Студия','студия','30 м²'],['Апартаменты','2 комнаты','61 м²']][n%4];
+        OBJECTS.push({ id:'gen'+n, name:nm, space, lock, addr:`Москва, ул. ${nm}, кв. ${1+(n*7)%150}`, type:types[0], rooms:types[1], area:types[2], status:'pub' });
         n++;
       });
     }
@@ -790,18 +793,20 @@
     const next = bs.find(b=> stripTime(b.ci)>stripTime(TODAY));
     return { cur, next };
   }
+  // единый вид с модалкой объекта на Сводке (статус + «Информация» + «Брони»)
+  let curObjId = null;
+  function objKv(label,val){ return `<div class="flex justify-between gap-4 py-1.5 border-b border-neutral-100 last:border-0"><span class="text-[12.5px] text-neutral-500 shrink-0">${label}</span><span class="text-[13px] text-right text-neutral-800">${val}</span></div>`; }
   function openObjModal(id){
     const o = objById(id); if(!o) return;
-    const lockBadge = o.lock===false
-      ? '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-500"><i data-lucide="lock-open" class="w-3.5 h-3.5"></i> Без замка</span>'
-      : o.lock==='keybox'
-        ? '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-amber-50 text-amber-700"><i data-lucide="key-round" class="w-3.5 h-3.5"></i> Кейбокс</span>'
-        : '<span class="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded bg-emerald-50 text-emerald-700"><i data-lucide="lock" class="w-3.5 h-3.5"></i> Умный замок</span>';
+    curObjId = o.id;
+    const statusBadge = o.status!=='draft'
+      ? '<span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Опубликован</span>'
+      : '<span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Черновик</span>';
     document.getElementById('omHead').innerHTML = `
-      <div class="flex items-center gap-2.5">
-        <span class="w-9 h-9 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-[18px] h-[18px] text-neutral-500"></i></span>
-        <div class="min-w-0 flex-1"><div class="text-[15px] font-semibold truncate">${esc(o.name)}</div><div class="text-[12px] text-neutral-400">${esc(o.space)}</div></div>
-        ${lockBadge}
+      <div class="flex items-start gap-2.5">
+        <span class="w-10 h-10 rounded-lg bg-neutral-100 grid place-items-center shrink-0"><i data-lucide="building-2" class="w-5 h-5 text-neutral-500"></i></span>
+        <div class="min-w-0 flex-1"><div class="text-[16px] font-bold truncate">${esc(o.name)}</div><div class="text-[12px] text-neutral-400 truncate">${esc(o.addr)}</div></div>
+        ${statusBadge}
       </div>`;
     const { cur, next } = objCurrentNext(id);
     const bkLine = (b, label, tone) => `
@@ -810,13 +815,23 @@
         <div class="min-w-0 flex-1"><div class="text-[12.5px] font-medium truncate">${esc(b.guest)}</div><div class="text-[11px] text-neutral-400">${fmtRange(b.ci,b.co)} · ${fmt(b.price)} ₽</div></div>
         <span class="text-[10.5px] font-medium px-1.5 py-0.5 rounded ${tone} shrink-0">${label}</span>
       </div>`;
-    let body = '';
-    if(cur) body += bkLine(cur, 'сейчас здесь', 'bg-emerald-50 text-emerald-700');
-    if(next) body += bkLine(next, 'следующая', 'bg-neutral-100 text-neutral-600');
-    if(!cur && !next) body = '<div class="text-[12.5px] text-neutral-400 text-center py-3">Нет активных и будущих броней</div>';
-    document.getElementById('omBody').innerHTML = body;
+    let bks = '';
+    if(cur) bks += bkLine(cur, 'сейчас здесь', 'bg-emerald-50 text-emerald-700');
+    if(next) bks += bkLine(next, 'следующая', 'bg-neutral-100 text-neutral-600');
+    if(!cur && !next) bks = '<div class="text-[12px] text-neutral-400 py-1">Нет активных и будущих броней</div>';
+    document.getElementById('omBody').innerHTML = `
+      <div class="rounded-xl border border-neutral-200 p-4">
+        <div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="info" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">Информация</span></div>
+        ${objKv('Пространство', esc(o.space))}${objKv('Тип', o.type||'Квартира')}${objKv('Комнат', o.rooms||'—')}${objKv('Площадь', o.area||'—')}${objKv('Адрес', esc(o.addr))}
+      </div>
+      <div class="rounded-xl border border-neutral-200 p-4 mt-3">
+        <div class="flex items-center gap-1.5 mb-2.5"><i data-lucide="calendar" class="w-[18px] h-[18px] text-teal-600"></i><span class="text-[13px] font-semibold">Брони</span></div>
+        <div class="space-y-2">${bks}</div>
+      </div>`;
     const m=document.getElementById('objModal'); m.classList.remove('hidden'); m.classList.add('flex'); lucide.createIcons();
   }
+  // деплинк как на Сводке: открыть экран «Объекты» сразу на карточке этого объекта
+  function openObjDeep(){ try{ if(window.top) window.top.__openObjectId = curObjId; }catch(e){} closeObjModal(); goScreen('objects'); }
   function closeObjModal(){ const m=document.getElementById('objModal'); m.classList.add('hidden'); m.classList.remove('flex'); }
   function filterObj(id){ openObjModal(id); }
 

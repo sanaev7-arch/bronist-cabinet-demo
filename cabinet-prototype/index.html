@@ -11,6 +11,11 @@
 <script src="tailwind.js"></script>
 <script>tailwind.config = { theme: { extend: { colors: { bordo: '#8b1d41' } } } };</script>
 <script src="lucide.min.js"></script>
+<!-- DnD на тач для самого shell (drag-reorder пунктов меню); экранам полифил инжектится при загрузке iframe -->
+<script type="module">
+  import { enableDragDropTouch } from './drag-drop-touch.esm.min.js';
+  enableDragDropTouch(document, document, { isPressHoldMode: true, pressHoldDelayMS: 350, forceListen: true });
+</script>
 <style>
   @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
   @font-face { font-family:'Geist Mono'; src:url('GeistMono-Variable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
@@ -43,6 +48,13 @@
     #shell-backdrop.active { display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; }
     .desktop-collapse { display:none !important; }  /* !important: иначе tailwind-утилита grid перебивает и кнопка collapse видна в drawer */
     .mobile-burger { display:grid !important; }  /* показываем только на мобиле */
+    /* 16px — иначе iOS Safari зумит страницу при фокусе на поле поиска, и зум остаётся после перехода */
+    #search-input { font-size:16px; }
+  }
+  /* iOS: 100vh выше видимой области (адресная строка) — низ экрана и тосты уходили за край.
+     dvh = реальная видимая высота, пересчитывается при скрытии/появлении панелей Safari. */
+  @supports (height: 100dvh) {
+    main.h-screen, aside#shell-sidebar { height:100dvh !important; }
   }
 </style>
 </head>
@@ -70,7 +82,8 @@
 
   <!-- ОБЛАСТЬ ЭКРАНА -->
   <main class="flex-1 min-w-0 h-screen flex flex-col">
-    <button onclick="openDrawer()" class="mobile-burger absolute top-3 left-3 z-30 w-9 h-9 bg-white border border-neutral-200 rounded-lg grid place-items-center text-neutral-700 shadow-sm"><i data-lucide="menu" class="w-5 h-5"></i></button>
+    <!-- fixed (не absolute): бургер остаётся на месте при любом скролле/зуме контента -->
+    <button onclick="openDrawer()" class="mobile-burger fixed top-3 left-3 z-30 w-9 h-9 bg-white border border-neutral-200 rounded-lg grid place-items-center text-neutral-700 shadow-sm"><i data-lucide="menu" class="w-5 h-5"></i></button>
     <iframe id="screen" class="w-full flex-1 border-0" title="Экран кабинета"></iframe>
   </main>
 
@@ -178,8 +191,24 @@
                          // grab-правило ИДЁТ ПОСЛЕ pointer → у draggable-элементов (даже с onclick) выигрывает grab.
                          "button:not([disabled]),select,summary,label,a,[onclick]{cursor:pointer}" +
                          "[draggable=\"true\"],.grip,.wdrag,.lock-card,.seg,.kb-card{cursor:grab}" +
-                         "[draggable=\"true\"]:active,.grip:active,.wdrag:active,.lock-card:active,.seg:active,.kb-card:active{cursor:grabbing}";
+                         "[draggable=\"true\"]:active,.grip:active,.wdrag:active,.lock-card:active,.seg:active,.kb-card:active{cursor:grabbing}" +
+                         // MOBILE-фундамент для всех экранов:
+                         // 1) инпуты ≥16px — iOS Safari зумит страницу при фокусе на меньших, зум остаётся после перехода («растянутый экран»);
+                         // 2) топбар sticky — при скролле шапка с бургером оставалась доступной.
+                         "@media (max-width:768px){" +
+                         "input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}" +
+                         "header.topbar{position:sticky;top:0;z-index:45;background:#fff}" +
+                         "}";
         doc.head.appendChild(st);
+      }
+      // DnD на тач-устройствах: HTML5 drag&drop не работает на touch — полифил DragDropTouch
+      // (press-hold: drag после удержания ~350мс, обычный свайп остаётся скроллом)
+      if (!doc.getElementById('h24-ddt')) {
+        const sc = doc.createElement('script');
+        sc.id = 'h24-ddt'; sc.type = 'module';
+        sc.textContent = "import {enableDragDropTouch} from '" + new URL('drag-drop-touch.esm.min.js', location.href).href + "';" +
+                         "enableDragDropTouch(document, document, {isPressHoldMode:true, pressHoldDelayMS:350, forceListen:true});";
+        doc.head.appendChild(sc);
       }
       injectTopbar(doc);              // единый профиль (#1) + колокольчик (#9) + toast (#4) на всех экранах
       // если переходили из панели «Все приглашения» — открыть нужный подраздел Настроек
@@ -214,7 +243,10 @@
     let host = doc.getElementById('h24-toast-host');
     if (!host) {
       host = doc.createElement('div'); host.id = 'h24-toast-host';
-      host.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none';
+      // на мобиле выше (84px + safe-area): у нижнего края тост уходил за границу видимой области iOS
+      const tb = (w.matchMedia && w.matchMedia('(max-width:768px)').matches)
+        ? 'calc(84px + env(safe-area-inset-bottom, 0px))' : '24px';
+      host.style.cssText = 'position:fixed;left:50%;bottom:' + tb + ';transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none';
       doc.body.appendChild(host);
     }
     w.toast = function (msg, type) {
@@ -371,6 +403,19 @@
         <button id="h24-bell-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
         <button id="h24-profile-btn-m" class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</button>
       </div>`);
+    // МОБИЛЬНЫЙ ФИКС: меню рождаются внутри .desktop-only (display:none на мобиле) —
+    // тап по мобильным кнопкам тоглил меню, которое физически не могло отрисоваться.
+    // Выносим меню в общий relative-врапер правого модуля: якорь right-0/top-full сохраняется,
+    // работает и с desktop-кнопок, и с мобильных.
+    const mobMod = bar.lastElementChild;                 // .mobile-only
+    const deskMod = mobMod.previousElementSibling;       // .desktop-only
+    const wrapMod = doc.createElement('div');
+    wrapMod.className = 'relative flex items-center';
+    bar.insertBefore(wrapMod, deskMod);
+    wrapMod.appendChild(deskMod); wrapMod.appendChild(mobMod);
+    ['h24-ref-menu', 'h24-bell-menu', 'h24-profile-menu', 'h24-support-menu'].forEach(id => {
+      const m = doc.getElementById(id); if (m) wrapMod.appendChild(m);
+    });
     // дропдауны топбара взаимоисключающие: открытие одного закрывает остальные
     const menus = ['h24-ref-menu', 'h24-bell-menu', 'h24-profile-menu', 'h24-support-menu'].map(id => doc.getElementById(id)).filter(Boolean);
     const toggle = m => { menus.forEach(x => { if (x !== m) x.classList.add('hidden'); }); m.classList.toggle('hidden'); };
