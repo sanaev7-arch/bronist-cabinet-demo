@@ -192,6 +192,9 @@
                          "button:not([disabled]),select,summary,label,a,[onclick]{cursor:pointer}" +
                          "[draggable=\"true\"],.grip,.wdrag,.lock-card,.seg,.kb-card{cursor:grab}" +
                          "[draggable=\"true\"]:active,.grip:active,.wdrag:active,.lock-card:active,.seg:active,.kb-card:active{cursor:grabbing}" +
+                         // перетаскиваемое нельзя выделять: иначе drag (особенно press-hold на тач)
+                         // запускает выделение текста; touch-callout глушит iOS-лупу при удержании
+                         "[draggable=\"true\"],.grip,.wdrag,.lock-card,.seg,.kb-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}" +
                          // MOBILE-фундамент для всех экранов:
                          // 1) инпуты ≥16px — iOS Safari зумит страницу при фокусе на меньших, зум остаётся после перехода («растянутый экран»);
                          // 2) топбар sticky — при скролле шапка с бургером оставалась доступной.
@@ -200,6 +203,17 @@
                          "header.topbar{position:sticky;top:0;z-index:45;background:#fff}" +
                          "}";
         doc.head.appendChild(st);
+      }
+      // на время любого drag глушим выделение текста по всему документу:
+      // браузер при перетаскивании «заодно» выделял весь текст на экране (desktop и mobile)
+      if (!doc.body.dataset.h24noselect) {
+        doc.body.dataset.h24noselect = '1';
+        const selOff = () => { doc.body.style.webkitUserSelect = 'none'; doc.body.style.userSelect = 'none'; };
+        const selOn  = () => { doc.body.style.webkitUserSelect = '';     doc.body.style.userSelect = '';
+                               const s = doc.defaultView.getSelection && doc.defaultView.getSelection(); if (s) s.removeAllRanges(); };
+        doc.addEventListener('dragstart', selOff);
+        doc.addEventListener('dragend', selOn);
+        doc.addEventListener('drop', selOn);
       }
       // DnD на тач-устройствах: HTML5 drag&drop не работает на touch — полифил DragDropTouch
       // (press-hold: drag после удержания ~350мс, обычный свайп остаётся скроллом)
@@ -399,7 +413,7 @@
       </div>
       <div class="mobile-only items-center gap-2">
         <button id="h24-search-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500"><i data-lucide="search" class="w-5 h-5"></i></button>
-        <button id="h24-ref-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-teal-700 relative"><i data-lucide="gift" class="w-5 h-5"></i><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-teal-600 ring-2 ring-white"></span></button>
+        <button id="h24-ref-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 relative" style="color:#8b1d41"><i data-lucide="gift" class="w-5 h-5"></i><span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-white"></span></button>
         <button id="h24-bell-btn-m" class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-neutral-100 text-neutral-500 relative"><i data-lucide="bell" class="w-5 h-5"></i><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white"></span></button>
         <button id="h24-profile-btn-m" class="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-[13px] font-semibold text-white">М</button>
       </div>`);

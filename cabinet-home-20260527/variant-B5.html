@@ -278,9 +278,9 @@
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
     <div class="flex items-center gap-2.5 px-5 py-3.5 border-b border-neutral-200">
       <i data-lucide="layout-grid" class="w-[18px] h-[18px] text-teal-600"></i>
-      <h2 class="text-[15px] font-semibold">Библиотека виджетов</h2>
-      <span class="text-[12px] text-neutral-400">добавьте на дашборд то, что нужно именно вам</span>
-      <button onclick="closeWidgetLib()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <h2 class="text-[15px] font-semibold shrink-0">Библиотека виджетов</h2>
+      <span class="text-[12px] text-neutral-400 hidden sm:inline">добавьте на дашборд то, что нужно именно вам</span>
+      <button onclick="closeWidgetLib()" class="ml-auto w-8 h-8 shrink-0 grid place-items-center rounded-lg border border-neutral-200 hover:bg-neutral-100 text-neutral-500"><i data-lucide="x" class="w-4 h-4"></i></button>
     </div>
     <div id="widgetLibBody" class="p-5 overflow-y-auto space-y-5"></div>
   </div>
@@ -651,10 +651,11 @@
   function renderWidgetLib() {
     const cats = {};
     Object.entries(WIDGETS).forEach(([k, w]) => { (cats[w.cat] = cats[w.cat] || []).push([k, w]); });
+    // на мобиле 1 колонка: в 2 колонки названия виджетов обрезались до пары букв
     document.getElementById('widgetLibBody').innerHTML = Object.entries(cats).map(([cat, items]) => `
       <div>
         <div class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400 mb-2">${cat}</div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           ${items.map(([k, w]) => { const on = activeWidgets.includes(k); return `
             <div class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${on ? 'border-teal-600 bg-white' : 'border-neutral-200'}">
               <i data-lucide="${w.icon}" class="w-[18px] h-[18px] ${on ? 'text-teal-700' : 'text-neutral-500'} shrink-0"></i>
@@ -675,7 +676,10 @@
     host.querySelectorAll('.dash-widget').forEach((el) => {
       const handle = el.querySelector('.wdrag');
       if (!handle) return;
-      handle.addEventListener('mousedown', (e) => {
+      // pointerdown (не mousedown): работает и мышью, и пальцем; touch-action:none на хэндле,
+      // чтобы браузер не перехватывал жест под скролл
+      handle.style.touchAction = 'none';
+      handle.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target.closest('button, a, textarea, input')) return;
         e.preventDefault();
         const startKey = el.dataset.wkey;
@@ -702,17 +706,19 @@
         };
         place(e.clientX, e.clientY);
 
-        const onMove = (ev) => place(ev.clientX, ev.clientY);
+        const onMove = (ev) => { ev.preventDefault(); place(ev.clientX, ev.clientY); };
         const onUp = () => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          document.removeEventListener('pointercancel', onUp);
           document.body.style.userSelect = '';
           // новый порядок: позиция плейсхолдера = новое место виджета
           activeWidgets = [...host.children].map((c) => c === ph ? startKey : c.dataset.wkey).filter(Boolean);
           saveWidgets(); renderDashboard();
         };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        document.addEventListener('pointermove', onMove, { passive: false });
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
       });
     });
   }
