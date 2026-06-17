@@ -282,16 +282,24 @@
     color:'teal', // цвет страницы под бренд компании; override для объекта — в Объект → «Гостю»
   };
   const WELCOME_COLORS = [
-    { key:'teal',    name:'Изумруд',   c:'#0f766e', d:'#115e59', l:'#0d9488' },
-    { key:'emerald', name:'Зелёный',   c:'#047857', d:'#065f46', l:'#059669' },
-    { key:'cyan',    name:'Бирюза',    c:'#0e7490', d:'#155e75', l:'#0891b2' },
-    { key:'blue',    name:'Синий',     c:'#1d4ed8', d:'#1e40af', l:'#2563eb' },
-    { key:'indigo',  name:'Индиго',    c:'#4338ca', d:'#3730a3', l:'#4f46e5' },
-    { key:'violet',  name:'Фиолет',    c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
-    { key:'fuchsia', name:'Фуксия',    c:'#a21caf', d:'#86198f', l:'#c026d3' },
-    { key:'rose',    name:'Бордо',     c:'#be123c', d:'#9f1239', l:'#e11d48' },
-    { key:'orange',  name:'Терракота', c:'#c2410c', d:'#9a3412', l:'#ea580c' },
-    { key:'slate',   name:'Графит',    c:'#334155', d:'#1e293b', l:'#475569' },
+    { key:'red',     name:'Красный',     c:'#dc2626', d:'#b91c1c', l:'#ef4444' },
+    { key:'orange',  name:'Оранжевый',   c:'#ea580c', d:'#c2410c', l:'#f97316' },
+    { key:'amber',   name:'Янтарь',      c:'#d97706', d:'#b45309', l:'#f59e0b' },
+    { key:'yellow',  name:'Жёлтый',      c:'#ca8a04', d:'#a16207', l:'#eab308' },
+    { key:'lime',    name:'Лаймовый',    c:'#65a30d', d:'#4d7c0f', l:'#84cc16' },
+    { key:'green',   name:'Зелёный',     c:'#16a34a', d:'#15803d', l:'#22c55e' },
+    { key:'emerald', name:'Изумруд',     c:'#059669', d:'#047857', l:'#10b981' },
+    { key:'teal',    name:'Бирюзовый',   c:'#0d9488', d:'#0f766e', l:'#14b8a6' },
+    { key:'cyan',    name:'Циан',        c:'#0891b2', d:'#0e7490', l:'#06b6d4' },
+    { key:'sky',     name:'Голубой',     c:'#0284c7', d:'#0369a1', l:'#0ea5e9' },
+    { key:'blue',    name:'Синий',       c:'#2563eb', d:'#1d4ed8', l:'#3b82f6' },
+    { key:'indigo',  name:'Индиго',      c:'#4f46e5', d:'#4338ca', l:'#6366f1' },
+    { key:'violet',  name:'Фиолетовый',  c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
+    { key:'purple',  name:'Пурпурный',   c:'#9333ea', d:'#7e22ce', l:'#a855f7' },
+    { key:'fuchsia', name:'Фуксия',      c:'#c026d3', d:'#a21caf', l:'#d946ef' },
+    { key:'pink',    name:'Розовый',     c:'#db2777', d:'#be185d', l:'#ec4899' },
+    { key:'rose',    name:'Роза',        c:'#e11d48', d:'#be123c', l:'#f43f5e' },
+    { key:'slate',   name:'Графит',      c:'#475569', d:'#334155', l:'#64748b' },
   ];
   const welcomeTheme = () => WELCOME_COLORS.find((t) => t.key === WELCOME.color);
   function setWelcomeColor(key) { WELCOME.color = key; renderSub(); lucide.createIcons(); toast(`Цвет Страницы брони: «${WELCOME_COLORS.find(t=>t.key===key).name}» — для всех объектов без своего цвета`); }
@@ -840,7 +848,7 @@
             </div>
             <div class="pt-1">
               <div class="text-[12px] font-medium text-neutral-600 mb-1.5">Цвет страницы <span class="text-neutral-400 font-normal">— под бренд компании</span></div>
-              <div class="flex items-center gap-2 mb-1">
+              <div class="flex flex-wrap items-center gap-2 mb-1">
                 ${WELCOME_COLORS.map((t) => `<button onclick="setWelcomeColor('${t.key}')" title="${t.name}" aria-label="${t.name}" class="w-7 h-7 rounded-full border-2 transition ${WELCOME.color===t.key ? 'border-neutral-800 scale-110' : 'border-transparent hover:scale-105'}" style="background:${t.c};"></button>`).join('')}
               </div>
               <div class="text-[11px] text-neutral-400 mb-3">Для конкретного объекта свой цвет — в объекте, вкладка «Гостю».</div>

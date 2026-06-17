@@ -637,16 +637,24 @@
   let guestShow = null;    // тумблеры Страницы брони (что показываем гостю)
   // оформление Страницы брони: цвет наследуется из шаблона (Автоматизация), здесь — override для объекта
   const GUEST_COLORS = [
-    { key:'teal',    name:'Изумруд',   c:'#0f766e', d:'#115e59', l:'#0d9488' },
-    { key:'emerald', name:'Зелёный',   c:'#047857', d:'#065f46', l:'#059669' },
-    { key:'cyan',    name:'Бирюза',    c:'#0e7490', d:'#155e75', l:'#0891b2' },
-    { key:'blue',    name:'Синий',     c:'#1d4ed8', d:'#1e40af', l:'#2563eb' },
-    { key:'indigo',  name:'Индиго',    c:'#4338ca', d:'#3730a3', l:'#4f46e5' },
-    { key:'violet',  name:'Фиолет',    c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
-    { key:'fuchsia', name:'Фуксия',    c:'#a21caf', d:'#86198f', l:'#c026d3' },
-    { key:'rose',    name:'Бордо',     c:'#be123c', d:'#9f1239', l:'#e11d48' },
-    { key:'orange',  name:'Терракота', c:'#c2410c', d:'#9a3412', l:'#ea580c' },
-    { key:'slate',   name:'Графит',    c:'#334155', d:'#1e293b', l:'#475569' },
+    { key:'red',     name:'Красный',     c:'#dc2626', d:'#b91c1c', l:'#ef4444' },
+    { key:'orange',  name:'Оранжевый',   c:'#ea580c', d:'#c2410c', l:'#f97316' },
+    { key:'amber',   name:'Янтарь',      c:'#d97706', d:'#b45309', l:'#f59e0b' },
+    { key:'yellow',  name:'Жёлтый',      c:'#ca8a04', d:'#a16207', l:'#eab308' },
+    { key:'lime',    name:'Лаймовый',    c:'#65a30d', d:'#4d7c0f', l:'#84cc16' },
+    { key:'green',   name:'Зелёный',     c:'#16a34a', d:'#15803d', l:'#22c55e' },
+    { key:'emerald', name:'Изумруд',     c:'#059669', d:'#047857', l:'#10b981' },
+    { key:'teal',    name:'Бирюзовый',   c:'#0d9488', d:'#0f766e', l:'#14b8a6' },
+    { key:'cyan',    name:'Циан',        c:'#0891b2', d:'#0e7490', l:'#06b6d4' },
+    { key:'sky',     name:'Голубой',     c:'#0284c7', d:'#0369a1', l:'#0ea5e9' },
+    { key:'blue',    name:'Синий',       c:'#2563eb', d:'#1d4ed8', l:'#3b82f6' },
+    { key:'indigo',  name:'Индиго',      c:'#4f46e5', d:'#4338ca', l:'#6366f1' },
+    { key:'violet',  name:'Фиолетовый',  c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
+    { key:'purple',  name:'Пурпурный',   c:'#9333ea', d:'#7e22ce', l:'#a855f7' },
+    { key:'fuchsia', name:'Фуксия',      c:'#c026d3', d:'#a21caf', l:'#d946ef' },
+    { key:'pink',    name:'Розовый',     c:'#db2777', d:'#be185d', l:'#ec4899' },
+    { key:'rose',    name:'Роза',        c:'#e11d48', d:'#be123c', l:'#f43f5e' },
+    { key:'slate',   name:'Графит',      c:'#475569', d:'#334155', l:'#64748b' },
   ];
   let guestColor = null;   // null = как в шаблоне (teal)
   let routeScheme = true;  // фото-схема прохода загружена (демо)
@@ -1003,7 +1011,7 @@
     // оформление страницы (цвет бренда) + маршрут до двери (схема, точка входа)
     const designCard = card('Оформление и маршрут', 'palette', `
       <div class="text-[12px] font-medium text-neutral-600 mb-1.5">Цвет страницы <span class="text-neutral-400 font-normal">— под бренд компании</span></div>
-      <div class="flex items-center gap-2 mb-1">
+      <div class="flex flex-wrap items-center gap-2 mb-1">
         <button onclick="setGuestColor(null)" class="text-[11.5px] font-medium px-2.5 py-1.5 rounded-full border transition ${guestColor===null ? 'border-teal-700 bg-teal-50 text-teal-700' : 'border-neutral-200 text-neutral-500 hover:border-neutral-400'}">Как в шаблоне</button>
         ${GUEST_COLORS.map((t) => `<button onclick="setGuestColor('${t.key}')" title="${t.name}" aria-label="${t.name}" class="w-6 h-6 rounded-full border-2 transition ${guestColor===t.key ? 'border-neutral-800 scale-110' : 'border-transparent hover:scale-105'}" style="background:${t.c};"></button>`).join('')}
       </div>

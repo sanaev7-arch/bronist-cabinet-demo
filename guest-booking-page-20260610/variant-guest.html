@@ -30,7 +30,7 @@
 
   /* ── Цвет бренда: хост выбирает в кабинете (Автоматизация → Страница брони / Объект → Гостю).
      Переменные перекрывают teal-классы Tailwind, чтобы вся страница перекрашивалась разом. ── */
-  :root { --brand:#0f766e; --brand-d:#115e59; --brand-l:#0d9488; --brand-bg:#f0fdfa; }
+  :root { --brand:#0d9488; --brand-d:#0f766e; --brand-l:#14b8a6; --brand-bg:#f0fdfa; }
   .bg-teal-700 { background-color: var(--brand) !important; }
   .hover\:bg-teal-800:hover { background-color: var(--brand-d) !important; }
   .hover\:bg-teal-50:hover { background-color: var(--brand-bg) !important; }
@@ -138,16 +138,24 @@ const SERVICES = [
 // Цвет бренда страницы — настройка хоста в кабинете (Автоматизация → Страница брони,
 // override в Объект → Гостю). Демо-переключатель показывает механику.
 const THEMES = [
-  { key:'teal',    name:'Изумруд',   brand:'#0f766e', d:'#115e59', l:'#0d9488', bg:'#f0fdfa' },
-  { key:'emerald', name:'Зелёный',   brand:'#047857', d:'#065f46', l:'#059669', bg:'#ecfdf5' },
-  { key:'cyan',    name:'Бирюза',    brand:'#0e7490', d:'#155e75', l:'#0891b2', bg:'#ecfeff' },
-  { key:'blue',    name:'Синий',     brand:'#1d4ed8', d:'#1e40af', l:'#2563eb', bg:'#eff6ff' },
-  { key:'indigo',  name:'Индиго',    brand:'#4338ca', d:'#3730a3', l:'#4f46e5', bg:'#eef2ff' },
-  { key:'violet',  name:'Фиолет',    brand:'#7c3aed', d:'#6d28d9', l:'#8b5cf6', bg:'#f5f3ff' },
-  { key:'fuchsia', name:'Фуксия',    brand:'#a21caf', d:'#86198f', l:'#c026d3', bg:'#fdf4ff' },
-  { key:'rose',    name:'Бордо',     brand:'#be123c', d:'#9f1239', l:'#e11d48', bg:'#fff1f2' },
-  { key:'orange',  name:'Терракота', brand:'#c2410c', d:'#9a3412', l:'#ea580c', bg:'#fff7ed' },
-  { key:'slate',   name:'Графит',    brand:'#334155', d:'#1e293b', l:'#475569', bg:'#f8fafc' },
+  { key:'red',     name:'Красный',     brand:'#dc2626', d:'#b91c1c', l:'#ef4444', bg:'#fef2f2' },
+  { key:'orange',  name:'Оранжевый',   brand:'#ea580c', d:'#c2410c', l:'#f97316', bg:'#fff7ed' },
+  { key:'amber',   name:'Янтарь',      brand:'#d97706', d:'#b45309', l:'#f59e0b', bg:'#fffbeb' },
+  { key:'yellow',  name:'Жёлтый',      brand:'#ca8a04', d:'#a16207', l:'#eab308', bg:'#fefce8' },
+  { key:'lime',    name:'Лаймовый',    brand:'#65a30d', d:'#4d7c0f', l:'#84cc16', bg:'#f7fee7' },
+  { key:'green',   name:'Зелёный',     brand:'#16a34a', d:'#15803d', l:'#22c55e', bg:'#f0fdf4' },
+  { key:'emerald', name:'Изумруд',     brand:'#059669', d:'#047857', l:'#10b981', bg:'#ecfdf5' },
+  { key:'teal',    name:'Бирюзовый',   brand:'#0d9488', d:'#0f766e', l:'#14b8a6', bg:'#f0fdfa' },
+  { key:'cyan',    name:'Циан',        brand:'#0891b2', d:'#0e7490', l:'#06b6d4', bg:'#ecfeff' },
+  { key:'sky',     name:'Голубой',     brand:'#0284c7', d:'#0369a1', l:'#0ea5e9', bg:'#f0f9ff' },
+  { key:'blue',    name:'Синий',       brand:'#2563eb', d:'#1d4ed8', l:'#3b82f6', bg:'#eff6ff' },
+  { key:'indigo',  name:'Индиго',      brand:'#4f46e5', d:'#4338ca', l:'#6366f1', bg:'#eef2ff' },
+  { key:'violet',  name:'Фиолетовый',  brand:'#7c3aed', d:'#6d28d9', l:'#8b5cf6', bg:'#f5f3ff' },
+  { key:'purple',  name:'Пурпурный',   brand:'#9333ea', d:'#7e22ce', l:'#a855f7', bg:'#faf5ff' },
+  { key:'fuchsia', name:'Фуксия',      brand:'#c026d3', d:'#a21caf', l:'#d946ef', bg:'#fdf4ff' },
+  { key:'pink',    name:'Розовый',     brand:'#db2777', d:'#be185d', l:'#ec4899', bg:'#fdf2f8' },
+  { key:'rose',    name:'Роза',        brand:'#e11d48', d:'#be123c', l:'#f43f5e', bg:'#fff1f2' },
+  { key:'slate',   name:'Графит',      brand:'#475569', d:'#334155', l:'#64748b', bg:'#f8fafc' },
 ];
 let themeKey = 'teal';
 function setTheme(key) {
@@ -716,8 +724,9 @@ function closeOverlays(e) { if (e.target === document.getElementById('overlay'))
 let toastTimer = null;
 function toast(text) {
   const el = document.getElementById('toast');
-  el.innerHTML = `<div class="fade-in bg-neutral-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-lg text-center">${text}</div>`;
+  el.innerHTML = `<div class="fade-in inline-flex items-center gap-2 bg-neutral-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-lg"><i data-lucide="check-circle" class="w-4 h-4 shrink-0" style="color:#34d399"></i><span class="text-left">${text}</span></div>`;
   el.classList.remove('hidden');
+  lucide.createIcons();
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
 }
