@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Апартаменты «Уют» · Страница брони</title>
+<link rel="icon" href="data:," />
+<script src="tailwind.js"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+  }}};
+</script>
+<style>
+  @font-face { font-family:'Inter'; src:url('InterVariable.woff2') format('woff2'); font-weight:100 900; font-display:swap; }
+  html { font-size: 15px; }
+  body { font-family:'Inter', system-ui, sans-serif; -webkit-font-smoothing:antialiased; background:#ebe9e6; }
+  /* урок прототипа: коды — Inter + tabular-nums, не Geist Mono (перечёркнутый ноль) */
+  .mono { font-family:'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing:.04em; }
+
+  .sheet-enter { animation: sheetUp .26s cubic-bezier(.32,.72,.34,1) both; }
+  @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .fade-in { animation: fadeIn .22s ease both; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
+  .pop-in { animation: popIn .3s cubic-bezier(.34,1.4,.5,1) both; }
+  @keyframes popIn { from { opacity:0; transform: translateY(8px) scale(.94);} to { opacity:1; transform:none; } }
+
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#d4d4d4; border-radius:4px; }
+
+  /* ── Цвет бренда: хост выбирает в кабинете (Автоматизация → Страница брони / Объект → Гостю).
+     Переменные перекрывают teal-классы Tailwind, чтобы вся страница перекрашивалась разом. ── */
+  :root { --brand:#0f766e; --brand-d:#115e59; --brand-l:#0d9488; --brand-bg:#f0fdfa; }
+  .bg-teal-700 { background-color: var(--brand) !important; }
+  .hover\:bg-teal-800:hover { background-color: var(--brand-d) !important; }
+  .hover\:bg-teal-50:hover { background-color: var(--brand-bg) !important; }
+  .text-teal-700, .text-teal-600 { color: var(--brand) !important; }
+  .text-teal-800 { color: var(--brand-d) !important; }
+  .bg-teal-50 { background-color: var(--brand-bg) !important; }
+  .border-teal-700 { border-color: var(--brand) !important; }
+  .hover\:border-teal-700:hover, .hover\:border-teal-600:hover { border-color: var(--brand) !important; }
+  .hover\:text-teal-700:hover { color: var(--brand) !important; }
+</style>
+</head>
+<body>
+
+<!-- ════════ DEMO-ПАНЕЛЬ (не часть гостевой страницы) ════════ -->
+<div class="fixed top-0 inset-x-0 z-50 bg-neutral-900 text-white">
+  <div class="max-w-[640px] mx-auto px-3 py-2 flex items-center gap-2 overflow-x-auto">
+    <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase">Демо · этап</span>
+    <div id="demoTabs" class="flex items-center gap-1.5"></div>
+    <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase pl-2 border-l border-neutral-700">Цвет</span>
+    <div id="demoThemes" class="flex items-center gap-1.5 shrink-0"></div>
+  </div>
+</div>
+
+<!-- ════════ ГОСТЕВАЯ СТРАНИЦА ════════ -->
+<div class="max-w-[430px] mx-auto min-h-screen bg-[#f6f5f3] shadow-xl" style="padding-top:44px;">
+
+  <!-- Шапка: бренд компании хоста (white-label). Логотип — из Настройки → Профиль компании;
+       если лого не загружено — показываем только название, без плейсхолдера. Фото объекта не используем. -->
+  <div class="relative overflow-hidden" style="background:linear-gradient(135deg,var(--brand-l) 0%,var(--brand) 45%,var(--brand-d) 100%);">
+    <i data-lucide="sparkles" class="absolute -right-6 -top-7 w-36 h-36 text-white/10 pointer-events-none"></i>
+    <i data-lucide="sparkle" class="absolute right-[88px] top-9 w-5 h-5 text-amber-300/70 pointer-events-none"></i>
+    <i data-lucide="sparkle" class="absolute right-12 bottom-6 w-3.5 h-3.5 text-white/40 pointer-events-none"></i>
+    <div class="absolute -left-10 -bottom-16 w-44 h-44 rounded-full bg-white/5 pointer-events-none"></div>
+    <div class="relative px-5 pt-5 pb-5 text-white">
+      <div class="text-[11px] font-medium uppercase tracking-widest opacity-80 mb-3">Страница вашей брони</div>
+      <div class="flex items-center gap-3">
+        <!-- логотип компании (демо: загружен) -->
+        <div class="w-12 h-12 rounded-2xl bg-white grid place-items-center shrink-0 shadow-md">
+          <span class="text-[20px] font-extrabold" style="color:var(--brand);">У</span>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[19px] font-bold leading-tight">Апартаменты «Уют»</div>
+          <div class="text-[12.5px] opacity-90 mt-0.5">Москва, ул. Тверская, 15</div>
+        </div>
+      </div>
+      <div class="mt-3"><span id="stageBadge" class="inline-block text-[11.5px] font-semibold px-2.5 py-1 rounded-full bg-white/15 border border-white/25 backdrop-blur-sm"></span></div>
+    </div>
+  </div>
+
+  <!-- Контент этапа -->
+  <div id="app" class="px-4 py-4 pb-32 space-y-3"></div>
+
+  <div class="px-4 pb-24 -mt-24 pt-2 text-center text-[11px] text-neutral-400">Апартаменты «Уют» · страница брони № 4815</div>
+</div>
+
+<!-- Плавающая кнопка чата + проактивный баббл -->
+<div id="chatNudge" class="fixed bottom-[92px] right-5 z-40 hidden max-w-[280px]"></div>
+<button onclick="openChat()" aria-label="Открыть чат"
+  class="fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-teal-700 text-white shadow-lg shadow-teal-900/30 grid place-items-center hover:bg-teal-800 active:scale-95 transition">
+  <i data-lucide="message-circle" class="w-6 h-6"></i>
+  <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#f6f5f3]"></span>
+</button>
+
+<!-- Оверлеи: чат / модалки / тост -->
+<div id="overlay" class="fixed inset-0 z-50 bg-black/40 hidden" onclick="closeOverlays(event)"></div>
+<div id="chatSheet" class="fixed inset-x-0 bottom-0 z-50 hidden"></div>
+<div id="modalSheet" class="fixed inset-x-0 bottom-0 z-50 hidden"></div>
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] hidden max-w-[90vw]"></div>
+
+<script src="lucide.min.js"></script>
+<script>
+// ════════════════════ ДАННЫЕ ДЕМО-БРОНИ ════════════════════
+const B = {
+  guest: 'Сергей',
+  checkin: '1 июня', checkinTime: '14:00',
+  checkout: '5 июня', checkoutTime: '12:00',
+  nights: 4,
+  // Оплата: бронь пришла с OTA — часть оплачена на площадке, остальное гость доплачивает.
+  // Для прямой брони (сайт/модуль бронирования) — predpaid 0, всё через кнопку онлайн.
+  source: 'Суточно.ру',
+  rentTotal: 24000, rentPrepaid: 6000,
+  deposit: '5 000 ₽',
+  code: '9500#',
+  intercom: '48К9500',
+  floor: '7 этаж, кв. 48',
+  wifiName: 'RG_Guest', wifiPass: '12345678',
+  // канал «Написать» — параметр из настроек хоста; в демо общение остаётся на странице (веб-чат)
+  reviewBonus: 'скидка 10% на следующее проживание', // настройка хоста: бонус за отзыв (может быть пустым)
+};
+const fmtP = (n) => n.toLocaleString('ru-RU') + ' ₽';
+
+// Каталог услуг — синхронизирован с Автоматизация → «Услуги» (stage: pre / stay / out / always)
+const SERVICES = [
+  { id:'early',    icon:'sunrise',        name:'Ранний заезд с 11:00',    desc:'Заселение на 3 часа раньше', price:700,  stage:'pre' },
+  { id:'late',     icon:'sunset',         name:'Поздний выезд до 16:00',  desc:'Ещё 4 часа без спешки',      price:900,  stage:'out' },
+  { id:'cleaning', icon:'brush',          name:'Дополнительная уборка',   desc:'Освежим квартиру во время проживания', price:1500, stage:'stay' },
+  { id:'transfer', icon:'car-front',      name:'Трансфер из аэропорта',   desc:'Встретим и довезём до квартиры',        price:2500, stage:'pre' },
+  { id:'parking',  icon:'square-parking', name:'Парковка во дворе',       desc:'Своё место на все дни проживания',      price:1200, stage:'always' },
+];
+
+// Цвет бренда страницы — настройка хоста в кабинете (Автоматизация → Страница брони,
+// override в Объект → Гостю). Демо-переключатель показывает механику.
+const THEMES = [
+  { key:'teal',   name:'Изумруд', brand:'#0f766e', d:'#115e59', l:'#0d9488', bg:'#f0fdfa' },
+  { key:'blue',   name:'Синий',   brand:'#1d4ed8', d:'#1e40af', l:'#2563eb', bg:'#eff6ff' },
+  { key:'violet', name:'Фиолет',  brand:'#7c3aed', d:'#6d28d9', l:'#8b5cf6', bg:'#f5f3ff' },
+  { key:'rose',   name:'Бордо',   brand:'#be123c', d:'#9f1239', l:'#e11d48', bg:'#fff1f2' },
+  { key:'slate',  name:'Графит',  brand:'#334155', d:'#1e293b', l:'#475569', bg:'#f8fafc' },
+];
+let themeKey = 'teal';
+function setTheme(key) {
+  themeKey = key;
+  const t = THEMES.find(x => x.key === key);
+  const r = document.documentElement.style;
+  r.setProperty('--brand', t.brand); r.setProperty('--brand-d', t.d);
+  r.setProperty('--brand-l', t.l); r.setProperty('--brand-bg', t.bg);
+  renderThemeDots();
+}
+function renderThemeDots() {
+  document.getElementById('demoThemes').innerHTML = THEMES.map(t =>
+    `<button onclick="setTheme('${t.key}')" title="${t.name}" aria-label="${t.name}" class="shrink-0 w-5 h-5 rounded-full border-2 transition ${themeKey === t.key ? 'border-white scale-110' : 'border-transparent opacity-70 hover:opacity-100'}" style="background:${t.brand};"></button>`
+  ).join('');
+}
+
+// Этапы цикла
+const STAGES = [
+  { key: 1, demo: 'До заезда',    badge: 'Заезд через 2 дня' },
+  { key: 2, demo: 'День заезда',  badge: 'Заезд сегодня' },
+  { key: 3, demo: 'Проживание',   badge: 'Вы проживаете' },
+  { key: 4, demo: 'День выезда',  badge: 'Выезд сегодня' },
+  { key: 5, demo: 'После выезда', badge: 'Бронь завершена' },
+];
+
+// Состояние демо
+const S = {
+  stage: 1,
+  rentPaid: false,          // доплата внесена
+  bought: {},               // купленные услуги по id
+  doorOpened: false,        // гость открыл дверь (= заезд зафиксирован, кнопки «я заехал» нет)
+  checkoutConfirmed: false,
+  nudgeShown: false,
+};
+
+// ════════════════════ ХЕЛПЕРЫ ════════════════════
+const icon = (n, cls='w-4 h-4') => `<i data-lucide="${n}" class="${cls}"></i>`;
+function card(inner, cls='') {
+  return `<div class="bg-white rounded-2xl border border-neutral-200/80 ${cls}">${inner}</div>`;
+}
+function row(ic, label, value, extra='') {
+  return `<div class="flex items-start gap-3 px-4 py-3 border-b border-neutral-100 last:border-0">
+    <span class="mt-0.5 text-teal-700 shrink-0">${icon(ic)}</span>
+    <div class="min-w-0 flex-1">
+      <div class="text-[11px] text-neutral-400 uppercase tracking-wide">${label}</div>
+      <div class="text-[14px] font-medium leading-snug">${value}</div>
+    </div>${extra}</div>`;
+}
+
+// ════════════════════ БРОНЬ И ОПЛАТА ════════════════════
+function bookingCard() {
+  const due = B.rentTotal - B.rentPrepaid;
+  const payChip = (S.rentPaid || S.stage >= 3)
+    ? `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">${icon('check','w-3 h-3')} Оплачено</span>`
+    : `<span class="inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full whitespace-nowrap">Доплата ${fmtP(due)}</span>`;
+  return card(`
+    <div class="px-4 pt-3.5 pb-1 flex items-center justify-between">
+      <div class="text-[13px] font-semibold">Ваша бронь · ${B.nights} ночи</div>${payChip}
+    </div>
+    <div class="px-4 pb-3.5 pt-2">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 rounded-xl bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+          <div class="text-[11px] text-neutral-400 uppercase tracking-wide">Заезд</div>
+          <div class="text-[15px] font-bold">${B.checkin}</div>
+          <div class="text-[12px] text-neutral-500">с ${S.bought.early ? '11:00' : B.checkinTime}${S.bought.early ? ' · ранний' : ''}</div>
+        </div>
+        <span class="text-neutral-300">${icon('arrow-right','w-4 h-4')}</span>
+        <div class="flex-1 rounded-xl bg-neutral-50 border border-neutral-100 px-3 py-2.5">
+          <div class="text-[11px] text-neutral-400 uppercase tracking-wide">Выезд</div>
+          <div class="text-[15px] font-bold">${B.checkout}</div>
+          <div class="text-[12px] text-neutral-500">до ${S.bought.late ? '16:00' : B.checkoutTime}${S.bought.late ? ' · поздний' : ''}</div>
+        </div>
+      </div>
+    </div>`);
+}
+
+// Оплата проживания: итог / оплачено на площадке / к доплате.
+// Прямая бронь (без OTA) — предоплаты нет, вся сумма через онлайн-кнопку.
+function paymentCard() {
+  if (S.stage >= 3) return ''; // после заезда вопрос оплаты закрыт
+  const due = B.rentTotal - B.rentPrepaid;
+  const line = (label, value, strong=false) => `
+    <div class="flex items-center justify-between py-1.5 ${strong ? '' : 'border-b border-neutral-100'}">
+      <span class="text-[13px] ${strong ? 'font-semibold' : 'text-neutral-500'}">${label}</span>
+      <span class="mono text-[13.5px] ${strong ? 'font-bold text-[15px]' : 'font-medium'} whitespace-nowrap">${value}</span>
+    </div>`;
+  if (S.rentPaid) {
+    return card(`
+      <div class="px-4 py-3.5 flex items-center gap-2.5">
+        <span class="text-emerald-600">${icon('check-circle-2','w-5 h-5')}</span>
+        <div class="flex-1">
+          <div class="text-[13.5px] font-semibold">Проживание оплачено полностью</div>
+          <div class="text-[12px] text-neutral-500">${fmtP(B.rentPrepaid)} — ${B.source}, ${fmtP(due)} — онлайн. Чеки придут сюда.</div>
+        </div>
+      </div>`);
+  }
+  return card(`
+    <div class="px-4 py-4">
+      <div class="text-[13px] font-semibold mb-1.5">Оплата проживания</div>
+      ${line('Итого за ' + B.nights + ' ночи', fmtP(B.rentTotal))}
+      ${line('Оплачено на ' + B.source, fmtP(B.rentPrepaid))}
+      ${line('К доплате', fmtP(due), true)}
+      <button onclick="payRent()" class="w-full text-[14px] font-semibold py-3 rounded-xl bg-teal-700 text-white hover:bg-teal-800 active:scale-[.99] transition mt-2">Доплатить онлайн · ${fmtP(due)}</button>
+      <div class="text-[11.5px] text-neutral-400 mt-2 text-center">Или при заселении — как договоримся в чате</div>
+    </div>`);
+}
+
+// ════════════════════ КОД ЗАМКА ════════════════════
+// Кнопка «Открыть дверь» вместо «Скопировать»: код вводят на панели, копировать нечего.
+// Первое открытие двери = автоматическая фиксация заезда (кнопки «я заехал» нет).
+// Текст мини-инструкции — из карточки объекта (поле хоста), здесь демо-наполнение.
+function codeBlock() {
+  let status, tone;
+  const off = S.stage === 5 || S.checkoutConfirmed;
+  const canOpen = S.stage >= 2 && !off;
+  if (off) { status = 'Код отключён — бронь завершена'; tone = 'text-neutral-400'; }
+  else if (S.stage === 1) { status = `Активируется к заезду — ${B.checkin}, ${S.bought.early ? '11:00' : B.checkinTime}`; tone = 'text-amber-600'; }
+  else if (S.stage === 2 && !S.doorOpened) { status = `Активируется сегодня в ${S.bought.early ? '11:00' : B.checkinTime}`; tone = 'text-amber-600'; }
+  else if (S.stage === 4) { status = `Действует сегодня до ${S.bought.late ? '16:00' : B.checkoutTime}`; tone = 'text-emerald-600'; }
+  else { status = `Действует до ${B.checkout}, ${B.checkoutTime}`; tone = 'text-emerald-600'; }
+  return card(`
+    <div class="px-4 py-4">
+      <div class="flex items-center gap-2 mb-2 text-[13px] font-semibold">${icon('key-round','w-4 h-4 text-teal-700')} Код от замка</div>
+      <div class="mono text-[30px] font-bold ${off ? 'text-neutral-300 line-through' : 'text-neutral-900'}">${B.code}</div>
+      <div class="text-[12.5px] font-medium mt-1 ${tone}">${status}</div>
+      ${off ? '' : `<div class="text-[12px] text-neutral-500 mt-2 leading-snug">Наберите код на панели замка и нажмите <span class="mono font-semibold">#</span> — или откройте дверь кнопкой ниже. Дверь домофона — код <span class="mono font-semibold">${B.intercom}</span>.</div>
+      <button onclick="${canOpen ? 'openDoor()' : `toast('Кнопка станет активной в день заезда')`}" class="w-full mt-3 inline-flex items-center justify-center gap-2 text-[14px] font-semibold py-3 rounded-xl transition active:scale-[.99] ${canOpen ? 'bg-teal-700 text-white hover:bg-teal-800' : 'bg-neutral-100 text-neutral-400'}">${icon('door-open','w-5 h-5')} Открыть дверь</button>`}
+    </div>`);
+}
+function openDoor() {
+  const first = !S.doorOpened && S.stage === 2;
+  S.doorOpened = true;
+  render();
+  toast(first ? 'Дверь открыта — добро пожаловать!' : 'Дверь открыта');
+}
+
+// ════════════════════ КАК ДОБРАТЬСЯ ════════════════════
+// Мини-карта с точкой входа (координаты — из карточки объекта, опыт RentyRoom)
+// + схема прохода от хоста (фото со стрелками), если загружена.
+function miniMap() {
+  return `<div class="relative h-[132px] rounded-xl overflow-hidden border border-neutral-200" style="background:#eef2ee;">
+    <svg viewBox="0 0 400 132" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect width="400" height="132" fill="#eef2ee"/>
+      <path d="M0 92 L400 70" stroke="#ffffff" stroke-width="16"/>
+      <path d="M0 92 L400 70" stroke="#d9ded8" stroke-width="1" stroke-dasharray="6 8"/>
+      <path d="M130 0 L155 132" stroke="#ffffff" stroke-width="11"/>
+      <path d="M300 0 L285 132" stroke="#ffffff" stroke-width="9"/>
+      <rect x="170" y="18" width="62" height="38" rx="3" fill="#d6dcd4"/>
+      <rect x="248" y="22" width="40" height="30" rx="3" fill="#dde2db"/>
+      <rect x="60" y="14" width="52" height="34" rx="3" fill="#dde2db"/>
+      <rect x="186" y="96" width="58" height="28" rx="3" fill="#d6dcd4"/>
+      <text x="14" y="86" font-size="9" fill="#9aa39a" font-family="Inter, sans-serif">Тверская ул.</text>
+    </svg>
+    <div class="absolute" style="left:48%; top:26%;">
+      <div class="relative -translate-x-1/2">
+        <div class="w-7 h-7 rounded-full bg-teal-700 border-[3px] border-white shadow-md grid place-items-center">${icon('door-open','w-3.5 h-3.5 text-white')}</div>
+        <div class="absolute top-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10.5px] font-semibold text-teal-800 bg-white/90 rounded-full px-2 py-0.5 shadow-sm">вход со двора</div>
+      </div>
+    </div>
+  </div>`;
+}
+function arrivalInfo() {
+  return card(`
+    <div class="px-4 pt-3.5 pb-3 text-[13px] font-semibold flex items-center gap-2">${icon('map-pin','w-4 h-4 text-teal-700')} Как добраться</div>
+    <div class="px-4">${miniMap()}</div>
+    ${row('map', 'Адрес', 'Москва, ул. Тверская, 15, кв. 48',
+      `<button onclick="openNavPicker()" class="shrink-0 self-center inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg border border-neutral-200 text-teal-700 hover:border-teal-700">${icon('navigation','w-3.5 h-3.5')} Маршрут</button>`)}
+    ${row('door-open', 'Подъезд и этаж', `Подъезд 2 со двора · ${B.floor}`)}
+    ${row('binary', 'Домофон', `<span class="mono font-semibold">${B.intercom}</span>, затем кнопка вызова`)}
+    <div class="px-4 py-3 border-b border-neutral-100">
+      <div class="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">Схема прохода от хозяев</div>
+      <button onclick="toast('Откроется фото-схема: двор, арка, нужный подъезд — стрелками')" class="w-full h-[88px] rounded-xl border border-dashed border-neutral-300 bg-neutral-50 grid place-items-center text-neutral-400 hover:border-teal-600 hover:text-teal-700 transition">
+        <span class="inline-flex items-center gap-2 text-[12.5px] font-medium">${icon('image','w-4 h-4')} Открыть схему (фото)</span>
+      </button>
+    </div>
+    <div class="px-4 py-3 text-[12.5px] text-neutral-500 leading-snug bg-neutral-50 rounded-b-2xl">От метро Тверская — 4 минуты пешком: выход № 2, направо вдоль Тверской до арки с вывеской «Двор 15».</div>`);
+}
+// Выбор навигатора — у каждого свой: Яндекс / 2ГИС / Google / Apple
+function openNavPicker() {
+  const apps = [
+    { name: 'Яндекс Карты', ic: 'map' },
+    { name: '2ГИС', ic: 'map-pinned' },
+    { name: 'Google Maps', ic: 'globe' },
+    { name: 'Apple Карты', ic: 'map-pin' },
+  ];
+  openModal(`
+    <div class="px-5 pt-5 pb-6">
+      <div class="text-[15px] font-bold mb-1">Построить маршрут</div>
+      <div class="text-[13px] text-neutral-500 mb-4">Выберите навигатор — маршрут до дома откроется в нём.</div>
+      <div class="grid grid-cols-2 gap-2">
+        ${apps.map(a => `<button onclick="closeAll(); toast('Маршрут откроется в «${a.name}»')" class="flex items-center gap-2.5 rounded-xl border border-neutral-200 px-3.5 py-3 text-left hover:border-teal-700 active:scale-[.98] transition">
+          <span class="w-9 h-9 rounded-xl bg-teal-50 grid place-items-center text-teal-700 shrink-0">${icon(a.ic,'w-5 h-5')}</span>
+          <span class="text-[13px] font-semibold leading-tight">${a.name}</span>
+        </button>`).join('')}
+      </div>
+    </div>`);
+}
+
+// ════════════════════ WI-FI / ПРАВИЛА ════════════════════
+function wifiBlock() {
+  return card(`
+    <div class="px-4 pt-3.5 pb-1 text-[13px] font-semibold flex items-center gap-2">${icon('wifi','w-4 h-4 text-teal-700')} Wi-Fi</div>
+    <div class="px-4 pb-1">
+      <div class="flex items-center justify-between py-2 border-b border-neutral-100">
+        <span class="text-[12px] text-neutral-400 uppercase tracking-wide">Сеть</span>
+        <span class="text-[14px] font-semibold">${B.wifiName}</span>
+      </div>
+      <div class="flex items-center justify-between py-2">
+        <span class="text-[12px] text-neutral-400 uppercase tracking-wide">Пароль</span>
+        <span class="inline-flex items-center gap-2">
+          <span class="mono text-[14px] font-semibold">${B.wifiPass}</span>
+          <button onclick="toast('Пароль Wi-Fi скопирован')" aria-label="Скопировать пароль" class="w-7 h-7 grid place-items-center rounded-lg border border-neutral-200 text-neutral-500 hover:border-teal-700 hover:text-teal-700">${icon('copy','w-3.5 h-3.5')}</button>
+        </span>
+      </div>
+    </div>
+    <div class="h-2"></div>`);
+}
+function rulesBlock() {
+  return card(`
+    <div class="px-4 pt-3.5 pb-1 text-[13px] font-semibold flex items-center gap-2">${icon('scroll-text','w-4 h-4 text-teal-700')} Правила</div>
+    <div class="px-4 pb-3.5 pt-1 text-[13px] text-neutral-600 leading-relaxed">Не курить · без вечеринок · тишина после 23:00 · питомцы — по согласованию. Полный текст правил пришлём по запросу в чате.</div>`);
+}
+
+// ════════════════════ УСЛУГИ (каталог допродаж) ════════════════════
+// Этап 1: весь каталог сразу — гость видит, что можно докупить (решение Михаила 2026-06-11).
+// Дальше: услуги своего этапа + кнопка «Все услуги». Напоминания — пушим в мессенджер, не на страницу.
+function svcRow(s) {
+  const bought = S.bought[s.id];
+  return `<button ${bought ? '' : `onclick="openUpsell('${s.id}')"`} class="w-full flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition ${bought ? 'border-emerald-200 bg-emerald-50/60 cursor-default' : 'border-neutral-200 bg-white hover:border-teal-700 active:scale-[.99]'}">
+    <span class="w-9 h-9 rounded-xl grid place-items-center shrink-0 ${bought ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-50 text-teal-700'}">${icon(bought ? 'check' : s.icon, 'w-5 h-5')}</span>
+    <div class="min-w-0 flex-1">
+      <div class="text-[13.5px] font-semibold ${bought ? 'text-emerald-800' : ''}">${s.name}</div>
+      <div class="text-[12px] text-neutral-500">${bought ? 'Добавлено к вашей брони' : s.desc}</div>
+    </div>
+    <span class="mono text-[13.5px] font-bold shrink-0 whitespace-nowrap ${bought ? 'text-emerald-700' : 'text-teal-700'}">${bought ? '' : '+' + fmtP(s.price)}</span>
+  </button>`;
+}
+function stageServices() {
+  if (S.stage === 1) return SERVICES;                       // весь каталог сразу
+  if (S.stage === 2) return SERVICES.filter(s => ['pre','always'].includes(s.stage));
+  if (S.stage === 3) return SERVICES.filter(s => ['stay','out','always'].includes(s.stage));
+  if (S.stage === 4 && !S.checkoutConfirmed) return SERVICES.filter(s => s.stage === 'out');
+  return [];
+}
+function upsellsBlock() {
+  const items = stageServices();
+  if (!items.length) return '';
+  const showAll = S.stage !== 1 && items.length < SERVICES.length;
+  return `<div>
+    <div class="text-[12px] font-semibold text-neutral-500 uppercase tracking-wide px-1 mb-2">${S.stage === 1 ? 'Что можно добавить к брони' : 'Сделать поездку удобнее'}</div>
+    <div class="space-y-2">${items.map(svcRow).join('')}</div>
+    ${showAll ? `<button onclick="openCatalog()" class="w-full mt-2 text-[12.5px] font-semibold py-2.5 rounded-xl border border-neutral-200 text-teal-700 hover:border-teal-700 transition">Все услуги</button>` : ''}
+  </div>`;
+}
+function openCatalog() {
+  openModal(`
+    <div class="px-5 pt-5 pb-6">
+      <div class="text-[15px] font-bold mb-3">Все услуги</div>
+      <div class="space-y-2">${SERVICES.map(svcRow).join('')}</div>
+    </div>`);
+}
+
+// ════════════════════ СВЯЗЬ ════════════════════
+// Гость уже на странице — общение остаётся здесь, в веб-чате (решение 2026-06-11).
+// Кнопок внешних мессенджеров нет; мягкий мостик в Telegram — внутри чата.
+function contactBlock() {
+  return card(`
+    <div class="px-4 py-4">
+      <div class="text-[13px] font-semibold mb-2.5">Есть вопрос?</div>
+      <button onclick="openChat()" class="w-full inline-flex items-center justify-center gap-1.5 text-[13.5px] font-semibold py-2.5 rounded-xl bg-teal-700 text-white hover:bg-teal-800 active:scale-[.99] transition">${icon('message-circle','w-4 h-4')} Написать нам</button>
+      <div class="text-[11.5px] text-neutral-400 mt-2 text-center">Обычно отвечаем за пару минут</div>
+    </div>`);
+}
+
+// ════════════════════ ВЫЕЗД / ЗАЛОГ / ОТЗЫВ ════════════════════
+function hero(title, sub, toneCls, inner='') {
+  return `<div class="rounded-2xl px-4 py-4 ${toneCls}">
+    <div class="text-[17px] font-bold leading-tight">${title}</div>
+    <div class="text-[13px] opacity-80 mt-1 leading-snug">${sub}</div>
+    ${inner}
+  </div>`;
+}
+function checkoutConfirmedBanner() {
+  return `<div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 fade-in">
+    <div class="flex items-center gap-2.5 mb-1.5"><span class="text-emerald-600">${icon('check-circle-2','w-5 h-5')}</span><div class="text-[14px] font-bold text-emerald-800">Выезд подтверждён</div></div>
+    <div class="text-[12.5px] text-emerald-800/80 leading-snug">Код замка отключён. Мы проверим квартиру и запустим возврат залога ${B.deposit}.</div>
+  </div>`;
+}
+function depositBlock() {
+  const text = S.stage === 5 || S.checkoutConfirmed
+    ? 'Мы проверяем квартиру. После проверки запустим возврат залога — деньги вернутся тем же способом, каким вы их вносили.'
+    : 'Вернётся после выезда: подтвердите выезд — мы проверим квартиру и запустим возврат.';
+  return card(`
+    <div class="px-4 py-3.5 flex items-start gap-3">
+      <span class="mt-0.5 text-teal-700">${icon('shield-check','w-4 h-4')}</span>
+      <div class="flex-1">
+        <div class="flex items-center justify-between gap-3">
+          <div class="text-[13px] font-semibold">Залог</div>
+          <div class="mono text-[14px] font-bold whitespace-nowrap">${B.deposit}</div>
+        </div>
+        <div class="text-[12.5px] text-neutral-500 leading-snug mt-1">${text}</div>
+      </div>
+    </div>`);
+}
+// Текст «перед выездом» хост заполняет по каждому объекту (Объект → вкладка «Гостю»); здесь демо.
+function checkoutChecklist() {
+  return card(`
+    <div class="px-4 pt-3.5 pb-1 text-[13px] font-semibold flex items-center gap-2">${icon('list-checks','w-4 h-4 text-teal-700')} Перед выездом</div>
+    <div class="px-4 pb-3.5 pt-1 text-[13px] text-neutral-600 leading-relaxed">Закройте окна, выключите свет и технику, оставьте ключ-карту на столе. Дверь просто захлопните — код перестанет действовать после вашего подтверждения.</div>`);
+}
+// Отзыв: бонус — настройка хоста (мотивация); напоминание дублируем в мессенджер гостя.
+function reviewBlock() {
+  return card(`
+    <div class="px-4 py-4">
+      <div class="flex items-center gap-2 mb-1.5 text-[13.5px] font-semibold">${icon('star','w-4 h-4 text-amber-500')} Поделитесь впечатлением</div>
+      ${B.reviewBonus ? `<div class="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 mb-2.5">
+        <span class="text-amber-500 shrink-0">${icon('gift','w-4 h-4')}</span>
+        <span class="text-[12.5px] font-medium text-amber-900">За отзыв — ${B.reviewBonus}. Промокод пришлём после публикации.</span>
+      </div>` : ''}
+      <div class="text-[12.5px] text-neutral-500 leading-snug mb-3">Это займёт минуту, а другим гостям сильно поможет с выбором.</div>
+      <button onclick="toast('Откроется страница отзыва на Суточно.ру — площадке вашей брони')" class="w-full text-[13.5px] font-semibold py-2.5 rounded-xl bg-teal-700 text-white hover:bg-teal-800 active:scale-[.99] transition">Оставить отзыв на Суточно.ру</button>
+    </div>`);
+}
+
+// ════════════════════ СБОРКА ЭТАПОВ ════════════════════
+function render() {
+  const stage = S.stage;
+  document.getElementById('stageBadge').textContent = STAGES.find(s => s.key === stage).badge;
+  let blocks = [];
+
+  if (stage === 1) {
+    blocks = [
+      hero(`Здравствуйте, ${B.guest}! Ждём вас ${B.checkin}`, 'Ниже — всё для спокойного заселения: оплата, код от замка и как добраться. Будут вопросы — напишите, ответим сразу.', 'bg-white border border-neutral-200/80'),
+      bookingCard(), paymentCard(), codeBlock(), upsellsBlock(), arrivalInfo(), rulesBlock(), contactBlock(),
+    ];
+  } else if (stage === 2) {
+    blocks = [
+      hero(`Сегодня заезд — ждём вас с ${S.bought.early ? '11:00' : B.checkinTime}`, 'Код и маршрут ниже. Если задерживаетесь или не находите подъезд — напишите, поможем сразу.', 'bg-teal-700 text-white'),
+      codeBlock(), arrivalInfo(), paymentCard(), upsellsBlock(), wifiBlock(), bookingCard(), rulesBlock(), contactBlock(),
+    ];
+  } else if (stage === 3) {
+    blocks = [
+      hero(`Хорошего отдыха, ${B.guest}!`, `Wi-Fi и правила под рукой. Выезд ${B.checkout} до ${S.bought.late ? '16:00' : B.checkoutTime} — но его можно продлить.`, 'bg-white border border-neutral-200/80'),
+      wifiBlock(), upsellsBlock(), codeBlock(), rulesBlock(),
+      card(`<div class="px-4 py-3.5 flex items-center justify-between gap-3">
+        <div class="text-[13px] text-neutral-600">Всё ли в порядке в квартире?</div>
+        <button onclick="openChat()" class="shrink-0 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-neutral-200 text-teal-700 hover:border-teal-700">Рассказать</button>
+      </div>`),
+      bookingCard(), contactBlock(),
+    ];
+  } else if (stage === 4) {
+    // «Подтвердить выезд» — главный CTA: белая кнопка внутри teal-hero, не сливается с фоном
+    blocks = S.checkoutConfirmed
+      ? [
+          hero('Спасибо, что были у нас!', 'Выезд подтверждён — хорошей дороги! Статус залога ниже, отзыв попросим чуть позже.', 'bg-teal-700 text-white'),
+          checkoutConfirmedBanner(), depositBlock(), bookingCard(), contactBlock(),
+        ]
+      : [
+          hero(`Сегодня выезд — до ${S.bought.late ? '16:00' : B.checkoutTime}`, 'Спасибо, что были у нас! Подтвердите выезд, когда освободите квартиру — и мы запустим возврат залога.', 'bg-teal-700 text-white',
+            `<button onclick="openCheckoutModal()" class="w-full mt-3.5 text-[15px] font-bold py-3.5 rounded-xl bg-white text-teal-800 shadow-md hover:bg-teal-50 active:scale-[.99] transition">Подтвердить выезд</button>`),
+          depositBlock(), upsellsBlock(), checkoutChecklist(), codeBlock(), bookingCard(), contactBlock(),
+        ];
+  } else {
+    blocks = [
+      hero(`Спасибо, что были у нас, ${B.guest}!`, 'Бронь завершена. Надеемся, вам было уютно — будем рады видеть вас снова.', 'bg-white border border-neutral-200/80'),
+      depositBlock(), reviewBlock(),
+      card(`<div class="px-4 py-3.5 text-[12.5px] text-neutral-500 leading-snug">Планируете вернуться? Напишите нам напрямую — для повторных гостей подберём лучшие условия без комиссии площадок.</div>`),
+      contactBlock(),
+    ];
+  }
+
+  document.getElementById('app').innerHTML = blocks.filter(Boolean).join('');
+  renderDemoTabs();
+  lucide.createIcons();
+}
+
+function renderDemoTabs() {
+  document.getElementById('demoTabs').innerHTML = STAGES.map(s =>
+    `<button onclick="setStage(${s.key})" class="shrink-0 text-[11.5px] font-medium px-2.5 py-1 rounded-full border transition ${S.stage === s.key ? 'bg-white text-neutral-900 border-white' : 'border-neutral-600 text-neutral-300 hover:border-neutral-400'}">${s.demo}</button>`
+  ).join('');
+}
+
+function setStage(k) {
+  S.stage = k;
+  if (k >= 3) S.rentPaid = true;
+  if (k === 5) S.checkoutConfirmed = true;
+  if (k < 4) S.checkoutConfirmed = false;
+  if (k < 2) S.doorOpened = false;
+  render();
+  window.scrollTo({ top: 0 });
+  scheduleNudge();
+}
+
+// ════════════════════ ОПЛАТЫ ════════════════════
+function payRent() {
+  const due = B.rentTotal - B.rentPrepaid;
+  openModal(`
+    <div class="px-5 pt-5 pb-6">
+      <div class="text-[15px] font-bold mb-1">Доплата за проживание</div>
+      <div class="text-[13px] text-neutral-500 mb-4">${fmtP(B.rentPrepaid)} уже оплачено на ${B.source}. Чек придёт на эту страницу.</div>
+      <div class="rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3 flex items-center justify-between mb-4">
+        <span class="text-[13.5px] font-medium">К доплате</span><span class="mono text-[17px] font-bold whitespace-nowrap">${fmtP(due)}</span>
+      </div>
+      <button onclick="S.rentPaid = true; closeAll(); render(); toast('Оплачено — спасибо! Чек придёт в течение минуты')" class="w-full text-[14px] font-semibold py-3 rounded-xl bg-teal-700 text-white hover:bg-teal-800">Оплатить картой или СБП</button>
+      <div class="text-[11px] text-neutral-400 text-center mt-2.5">Безопасный платёж через ЮKassa</div>
+    </div>`);
+}
+function openUpsell(id) {
+  const s = SERVICES.find(x => x.id === id);
+  openModal(`
+    <div class="px-5 pt-5 pb-6">
+      <div class="text-[15px] font-bold mb-1">${s.name}</div>
+      <div class="text-[13px] text-neutral-500 mb-4">${s.desc}. Оплата картой или СБП — услуга добавится к брони сразу после оплаты.</div>
+      <div class="rounded-xl bg-neutral-50 border border-neutral-100 px-4 py-3 flex items-center justify-between mb-4">
+        <span class="text-[13.5px] font-medium">К оплате</span><span class="mono text-[17px] font-bold whitespace-nowrap">${fmtP(s.price)}</span>
+      </div>
+      <button onclick="buyService('${s.id}')" class="w-full text-[14px] font-semibold py-3 rounded-xl bg-teal-700 text-white hover:bg-teal-800">Оплатить ${fmtP(s.price)}</button>
+      <div class="text-[11px] text-neutral-400 text-center mt-2.5">Безопасный платёж через ЮKassa</div>
+    </div>`);
+}
+function buyService(id) {
+  S.bought[id] = true;
+  closeAll(); render();
+  const ok = { early: 'Готово! Заезд с 11:00 — код активируется раньше', late: 'Готово! Выезд до 16:00 — код продлён', cleaning: 'Принято! Согласуем время уборки в чате', transfer: 'Принято! Напишем в чат, чтобы согласовать рейс и время', parking: 'Готово! Место во дворе закреплено за вами' };
+  toast(ok[id] || 'Услуга добавлена к брони');
+}
+
+function openCheckoutModal() {
+  openModal(`
+    <div class="px-5 pt-5 pb-6">
+      <div class="text-[15px] font-bold mb-2">Подтвердить выезд?</div>
+      <div class="text-[13px] text-neutral-600 leading-relaxed mb-4">Подтверждая выезд, вы сообщаете, что освободили квартиру. Код замка отключится. Мы проверим квартиру и запустим возврат залога <b>${B.deposit}</b>.</div>
+      <button onclick="S.checkoutConfirmed = true; closeAll(); render(); toast('Выезд подтверждён. Спасибо, что были у нас!')" class="w-full text-[14px] font-semibold py-3 rounded-xl bg-teal-700 text-white hover:bg-teal-800 mb-2">Да, я выехал(а)</button>
+      <button onclick="closeAll()" class="w-full text-[13.5px] font-medium py-2.5 rounded-xl border border-neutral-200 text-neutral-600">Я ещё в квартире</button>
+    </div>`);
+}
+
+// ════════════════════ ЧАТ — проактивный, от лица команды объекта ════════════════════
+// Цель: общение и допродажа прямо на странице. Quick-reply кнопки предлагают услугу этапа.
+// Мягкий мостик в Telegram — строкой под вводом (не уводим, а даём выбор).
+function nudgeService() {
+  const id = { 1: 'transfer', 2: 'transfer', 3: 'cleaning', 4: 'late' }[S.stage];
+  const s = SERVICES.find(x => x.id === id);
+  return s && !S.bought[s.id] ? s : null;
+}
+let chatLog = [
+  { who: 'guest', text: 'Здравствуйте! А есть парковка рядом?' },
+  { who: 'host',  text: 'Здравствуйте, Сергей! Да, бесплатная на улице, но места разбирают быстро. Надёжнее — своё место во дворе на все дни, могу закрепить за вами.' },
+];
+function chatBubble(m) {
+  return m.who === 'guest'
+    ? `<div class="flex justify-end"><div class="max-w-[80%] rounded-2xl rounded-br-md bg-teal-700 text-white px-3.5 py-2.5 text-[13.5px] leading-snug">${m.text}</div></div>`
+    : `<div class="flex justify-start"><div class="max-w-[80%] rounded-2xl rounded-bl-md bg-neutral-100 px-3.5 py-2.5 text-[13.5px] leading-snug">${m.text}</div></div>`;
+}
+function quickReplies() {
+  const s = nudgeService();
+  if (!s) return '';
+  return `<div id="chatQuick" class="px-4 pb-2">
+    <div class="text-[11px] text-neutral-400 mb-1.5">Анна предлагает:</div>
+    <div class="flex flex-wrap gap-1.5">
+      <button onclick="qrYes('${s.id}')" class="text-[12.5px] font-semibold px-3 py-1.5 rounded-full bg-teal-700 text-white hover:bg-teal-800">${s.name} · ${fmtP(s.price)}</button>
+      <button onclick="qrNo()" class="text-[12.5px] font-medium px-3 py-1.5 rounded-full border border-neutral-200 text-neutral-600 hover:border-neutral-400">Не нужно, спасибо</button>
+    </div>
+  </div>`;
+}
+function chatGreeting() {
+  const s = nudgeService();
+  const greet = { 1: 'Подсказать что-то по заезду? И сразу спрошу:', 2: 'Сегодня ждём вас! Если что-то нужно к заезду — я тут. Кстати:', 3: 'Как вам у нас? Если что-то нужно — пишите. И предложу:', 4: 'Сегодня выезд — если нужна помощь, я тут. Может, пригодится:', 5: 'Рады были видеть вас! Если остались вопросы — пишите.' }[S.stage];
+  return s ? `${greet} ${s.name.toLowerCase()} — ${fmtP(s.price)}. Оформить?` : greet;
+}
+function openChat() {
+  hideNudge();
+  document.getElementById('overlay').classList.remove('hidden');
+  const el = document.getElementById('chatSheet');
+  el.classList.remove('hidden');
+  const log = [...chatLog, { who: 'host', text: chatGreeting() }];
+  el.innerHTML = `
+    <div class="max-w-[430px] mx-auto bg-white rounded-t-3xl sheet-enter overflow-hidden" style="max-height:78vh; display:flex; flex-direction:column;">
+      <div class="px-4 py-3 border-b border-neutral-100 flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full grid place-items-center text-white font-bold text-[14px]" style="background:var(--brand);">А</div>
+        <div class="flex-1">
+          <div class="text-[14px] font-bold leading-tight">Анна · Апартаменты «Уют»</div>
+          <div class="text-[11.5px] text-emerald-600 font-medium">онлайн · отвечаем за пару минут</div>
+        </div>
+        <button onclick="closeAll()" aria-label="Закрыть чат" class="w-8 h-8 grid place-items-center rounded-full hover:bg-neutral-100 text-neutral-400">${icon('x','w-4 h-4')}</button>
+      </div>
+      <div id="chatMsgs" class="px-4 py-4 space-y-2.5 overflow-y-auto" style="flex:1; min-height:200px;">${log.map(chatBubble).join('')}</div>
+      ${quickReplies()}
+      <div class="px-3 pt-3 border-t border-neutral-100 flex items-center gap-2">
+        <input id="chatInput" placeholder="Напишите сообщение…" onkeydown="if(event.key==='Enter')sendChat()" class="flex-1 text-[13.5px] rounded-xl border border-neutral-200 px-3.5 py-2.5 focus:outline-none focus:border-teal-700" />
+        <button onclick="sendChat()" aria-label="Отправить" class="w-10 h-10 rounded-xl bg-teal-700 text-white grid place-items-center hover:bg-teal-800 active:scale-95 transition">${icon('send','w-4 h-4')}</button>
+      </div>
+      <button onclick="toast('Уведомления включены — ответы и предложения будут приходить на телефон')" class="px-3 py-2 text-[11.5px] text-neutral-400 hover:text-teal-700 text-center w-full inline-flex items-center justify-center gap-1">${icon('bell','w-3 h-3')} Включить уведомления об ответах</button>
+    </div>`;
+  lucide.createIcons();
+  const msgs = document.getElementById('chatMsgs');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function appendChat(m) {
+  chatLog.push(m);
+  const msgs = document.getElementById('chatMsgs');
+  if (msgs) { msgs.insertAdjacentHTML('beforeend', chatBubble(m)); msgs.scrollTop = msgs.scrollHeight; }
+}
+function qrYes(id) {
+  const q = document.getElementById('chatQuick'); if (q) q.remove();
+  closeAll();
+  openUpsell(id);
+}
+function qrNo() {
+  const q = document.getElementById('chatQuick'); if (q) q.remove();
+  appendChat({ who: 'guest', text: 'Не нужно, спасибо' });
+  setTimeout(() => appendChat({ who: 'host', text: 'Хорошо! Если передумаете — услуги всегда на этой странице. Чем ещё помочь?' }), 600);
+}
+function sendChat() {
+  const inp = document.getElementById('chatInput');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  appendChat({ who: 'guest', text });
+  inp.value = '';
+  setTimeout(() => appendChat({ who: 'host', text: 'Принято! Уже смотрим — ответим через минуту.' }), 700);
+}
+
+// Проактивный баббл у кнопки чата: «менеджер» сам начинает разговор
+let nudgeTimer = null;
+function scheduleNudge() {
+  hideNudge();
+  if (S.nudgeShown || S.stage === 5) return;
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(showNudge, 1400);
+}
+function showNudge() {
+  if (S.nudgeShown) return;
+  S.nudgeShown = true;
+  const s = nudgeService();
+  const text = s ? `Здравствуйте, ${B.guest}! Подсказать по заезду? Могу сразу оформить: ${s.name.toLowerCase()} · ${fmtP(s.price)}` : `Здравствуйте, ${B.guest}! Если есть вопросы — я на связи.`;
+  const el = document.getElementById('chatNudge');
+  el.classList.remove('hidden');
+  el.innerHTML = `<div class="pop-in relative bg-white rounded-2xl rounded-br-md border border-neutral-200 shadow-xl px-3.5 py-3 cursor-pointer" onclick="openChat()">
+    <button onclick="event.stopPropagation(); hideNudge()" aria-label="Скрыть" class="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-neutral-200 text-neutral-500 grid place-items-center text-[10px] hover:bg-neutral-300">${icon('x','w-3 h-3')}</button>
+    <div class="text-[11px] font-semibold text-teal-700 mb-0.5">Анна · Апартаменты «Уют»</div>
+    <div class="text-[12.5px] text-neutral-700 leading-snug">${text}</div>
+  </div>`;
+  lucide.createIcons();
+}
+function hideNudge() {
+  const el = document.getElementById('chatNudge');
+  el.classList.add('hidden'); el.innerHTML = '';
+}
+
+// ════════════════════ ОВЕРЛЕИ / ТОСТ ════════════════════
+function openModal(html) {
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('chatSheet').classList.add('hidden');
+  const el = document.getElementById('modalSheet');
+  el.classList.remove('hidden');
+  el.innerHTML = `<div class="max-w-[430px] mx-auto bg-white rounded-t-3xl sheet-enter">${html}</div>`;
+  lucide.createIcons();
+}
+function closeAll() {
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('chatSheet').classList.add('hidden');
+  document.getElementById('modalSheet').classList.add('hidden');
+}
+function closeOverlays(e) { if (e.target === document.getElementById('overlay')) closeAll(); }
+
+let toastTimer = null;
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.innerHTML = `<div class="fade-in bg-neutral-900 text-white text-[13px] font-medium px-4 py-2.5 rounded-xl shadow-lg text-center">${text}</div>`;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+}
+
+render();
+renderThemeDots();
+scheduleNudge();
+</script>
+</body>
+</html>
