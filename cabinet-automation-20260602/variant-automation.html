@@ -282,11 +282,16 @@
     color:'teal', // цвет страницы под бренд компании; override для объекта — в Объект → «Гостю»
   };
   const WELCOME_COLORS = [
-    { key:'teal',   name:'Изумруд', c:'#0f766e', d:'#115e59', l:'#0d9488' },
-    { key:'blue',   name:'Синий',   c:'#1d4ed8', d:'#1e40af', l:'#2563eb' },
-    { key:'violet', name:'Фиолет',  c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
-    { key:'rose',   name:'Бордо',   c:'#be123c', d:'#9f1239', l:'#e11d48' },
-    { key:'slate',  name:'Графит',  c:'#334155', d:'#1e293b', l:'#475569' },
+    { key:'teal',    name:'Изумруд',   c:'#0f766e', d:'#115e59', l:'#0d9488' },
+    { key:'emerald', name:'Зелёный',   c:'#047857', d:'#065f46', l:'#059669' },
+    { key:'cyan',    name:'Бирюза',    c:'#0e7490', d:'#155e75', l:'#0891b2' },
+    { key:'blue',    name:'Синий',     c:'#1d4ed8', d:'#1e40af', l:'#2563eb' },
+    { key:'indigo',  name:'Индиго',    c:'#4338ca', d:'#3730a3', l:'#4f46e5' },
+    { key:'violet',  name:'Фиолет',    c:'#7c3aed', d:'#6d28d9', l:'#8b5cf6' },
+    { key:'fuchsia', name:'Фуксия',    c:'#a21caf', d:'#86198f', l:'#c026d3' },
+    { key:'rose',    name:'Бордо',     c:'#be123c', d:'#9f1239', l:'#e11d48' },
+    { key:'orange',  name:'Терракота', c:'#c2410c', d:'#9a3412', l:'#ea580c' },
+    { key:'slate',   name:'Графит',    c:'#334155', d:'#1e293b', l:'#475569' },
   ];
   const welcomeTheme = () => WELCOME_COLORS.find((t) => t.key === WELCOME.color);
   function setWelcomeColor(key) { WELCOME.color = key; renderSub(); lucide.createIcons(); toast(`Цвет Страницы брони: «${WELCOME_COLORS.find(t=>t.key===key).name}» — для всех объектов без своего цвета`); }

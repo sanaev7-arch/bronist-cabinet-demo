@@ -46,16 +46,20 @@
 
 <!-- ════════ DEMO-ПАНЕЛЬ (не часть гостевой страницы) ════════ -->
 <div class="fixed top-0 inset-x-0 z-50 bg-neutral-900 text-white">
-  <div class="max-w-[640px] mx-auto px-3 py-2 flex items-center gap-2 overflow-x-auto">
-    <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase">Демо · этап</span>
-    <div id="demoTabs" class="flex items-center gap-1.5"></div>
-    <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase pl-2 border-l border-neutral-700">Цвет</span>
-    <div id="demoThemes" class="flex items-center gap-1.5 shrink-0"></div>
+  <div class="max-w-[640px] mx-auto px-3 py-1.5 space-y-1.5">
+    <div class="flex items-center gap-2 overflow-x-auto">
+      <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase w-10">Этап</span>
+      <div id="demoTabs" class="flex items-center gap-1.5"></div>
+    </div>
+    <div class="flex items-center gap-2 overflow-x-auto">
+      <span class="text-[10px] font-bold tracking-widest text-amber-400 shrink-0 uppercase w-10">Цвет</span>
+      <div id="demoThemes" class="flex items-center gap-1.5"></div>
+    </div>
   </div>
 </div>
 
 <!-- ════════ ГОСТЕВАЯ СТРАНИЦА ════════ -->
-<div class="max-w-[430px] mx-auto min-h-screen bg-[#f6f5f3] shadow-xl" style="padding-top:44px;">
+<div class="max-w-[430px] mx-auto min-h-screen bg-[#f6f5f3] shadow-xl" style="padding-top:72px;">
 
   <!-- Шапка: бренд компании хоста (white-label). Логотип — из Настройки → Профиль компании;
        если лого не загружено — показываем только название, без плейсхолдера. Фото объекта не используем. -->
@@ -134,11 +138,16 @@ const SERVICES = [
 // Цвет бренда страницы — настройка хоста в кабинете (Автоматизация → Страница брони,
 // override в Объект → Гостю). Демо-переключатель показывает механику.
 const THEMES = [
-  { key:'teal',   name:'Изумруд', brand:'#0f766e', d:'#115e59', l:'#0d9488', bg:'#f0fdfa' },
-  { key:'blue',   name:'Синий',   brand:'#1d4ed8', d:'#1e40af', l:'#2563eb', bg:'#eff6ff' },
-  { key:'violet', name:'Фиолет',  brand:'#7c3aed', d:'#6d28d9', l:'#8b5cf6', bg:'#f5f3ff' },
-  { key:'rose',   name:'Бордо',   brand:'#be123c', d:'#9f1239', l:'#e11d48', bg:'#fff1f2' },
-  { key:'slate',  name:'Графит',  brand:'#334155', d:'#1e293b', l:'#475569', bg:'#f8fafc' },
+  { key:'teal',    name:'Изумруд',   brand:'#0f766e', d:'#115e59', l:'#0d9488', bg:'#f0fdfa' },
+  { key:'emerald', name:'Зелёный',   brand:'#047857', d:'#065f46', l:'#059669', bg:'#ecfdf5' },
+  { key:'cyan',    name:'Бирюза',    brand:'#0e7490', d:'#155e75', l:'#0891b2', bg:'#ecfeff' },
+  { key:'blue',    name:'Синий',     brand:'#1d4ed8', d:'#1e40af', l:'#2563eb', bg:'#eff6ff' },
+  { key:'indigo',  name:'Индиго',    brand:'#4338ca', d:'#3730a3', l:'#4f46e5', bg:'#eef2ff' },
+  { key:'violet',  name:'Фиолет',    brand:'#7c3aed', d:'#6d28d9', l:'#8b5cf6', bg:'#f5f3ff' },
+  { key:'fuchsia', name:'Фуксия',    brand:'#a21caf', d:'#86198f', l:'#c026d3', bg:'#fdf4ff' },
+  { key:'rose',    name:'Бордо',     brand:'#be123c', d:'#9f1239', l:'#e11d48', bg:'#fff1f2' },
+  { key:'orange',  name:'Терракота', brand:'#c2410c', d:'#9a3412', l:'#ea580c', bg:'#fff7ed' },
+  { key:'slate',   name:'Графит',    brand:'#334155', d:'#1e293b', l:'#475569', bg:'#f8fafc' },
 ];
 let themeKey = 'teal';
 function setTheme(key) {
